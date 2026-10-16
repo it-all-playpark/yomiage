@@ -105,7 +105,7 @@ export async function translateStream(opts: {
   sourceLang: string | 'auto';
   dict: DictHint[];
   signal?: AbortSignal;
-  onSentence: (s: Sentence) => void;
+  onSentence: (s: Sentence, paragraph: number) => void; // paragraph は原文の段落番号（0 から）
   fetchImpl?: typeof fetch;
 }): Promise<{ usage?: unknown }> {
   const fetchImpl = opts.fetchImpl ?? fetch;
@@ -120,9 +120,10 @@ export async function translateStream(opts: {
 
   const usages: unknown[] = [];
   let next = 0; // 全段落通しの文番号
+  let para = 0; // いま訳している段落の番号
 
   // パースできた文に通し番号を振って渡す（モデルの i は使わない）
-  const emit = (s: Sentence) => opts.onSentence({ ...s, i: next++ });
+  const emit = (s: Sentence) => opts.onSentence({ ...s, i: next++ }, para);
 
   // 壊れた行の文だけを、非ストリーミングで 1 回だけ再要求する（§3.3）
   const retryLine = async (paragraph: string, broken: string): Promise<Sentence | null> => {
@@ -161,7 +162,8 @@ export async function translateStream(opts: {
     if (s) emit(s);
   };
 
-  for (const paragraph of splitParagraphs(opts.text)) {
+  for (const [p, paragraph] of splitParagraphs(opts.text).entries()) {
+    para = p;
     const messages = buildMessages(paragraph, { sourceLang: opts.sourceLang, dictHints: opts.dict, startIndex: next });
     const res = await post(messages, true);
     if (!res.body) throw toGroqError('network');

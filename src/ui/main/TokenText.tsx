@@ -16,9 +16,15 @@ export function TokenText(props: {
   const { view, showAllRuby, speaking, selectedId } = props;
   const kana = view === 'kana';
 
-  return (
-    <p class="main-text" lang="ja">
-      {props.sentences.map((s) => {
+  // 原文の段落ごとに 1 つの <p> にまとめる（文は段落順に届く）
+  const paragraphs: SessionSentence[][] = [];
+  for (const s of props.sentences) {
+    const last = paragraphs.at(-1);
+    if (last && last[0].p === s.p) last.push(s);
+    else paragraphs.push([s]);
+  }
+
+  const sentence = (s: SessionSentence) => {
         const current = speaking.sentence === s.i;
         // boundary が来ない声では文全体をハイライト（§6）
         const wholeSentence = current && (!speaking.boundarySupported || speaking.tokenId === null);
@@ -68,8 +74,21 @@ export function TokenText(props: {
             })}
           </span>
         );
-      })}
-      {props.receiving && <span class="main-receiving">次の文を受信中…</span>}
-    </p>
+  };
+
+  return (
+    <div class="main-text" lang="ja">
+      {paragraphs.map((group, k) => (
+        <p key={group[0].p} class="main-para">
+          {group.map(sentence)}
+          {props.receiving && k === paragraphs.length - 1 && <span class="main-receiving">次の文を受信中…</span>}
+        </p>
+      ))}
+      {props.receiving && paragraphs.length === 0 && (
+        <p class="main-para">
+          <span class="main-receiving">次の文を受信中…</span>
+        </p>
+      )}
+    </div>
   );
 }

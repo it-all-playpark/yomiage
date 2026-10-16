@@ -168,10 +168,15 @@
 
 /* 訳文（§4.3） */
 .main-text {
-  margin: 0;
   padding: 8px 4px;
   font-size: 18px;
   line-height: 2.5;
+}
+.main-para {
+  margin: 0;
+}
+.main-para + .main-para {
+  margin-top: 0.75em;
 }
 .main-sent {
   border-radius: 3px;
