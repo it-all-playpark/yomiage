@@ -4,13 +4,18 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "copy-dict": "node scripts/copy-dict.mjs",
+    "predev": "node scripts/copy-dict.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-dict.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "pretest": "node scripts/copy-dict.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@preact/signals": "^2.11.3",
     "kuromoji": "^0.1.2",
     "preact": "^11.0.1"
   },

@@ -1,0 +1,244 @@
+/* 初回設定画面（docs/mock/Setup.dc.html） */
+.setup {
+  max-width: 1216px;
+  margin: 0 auto;
+  padding: 8px 32px 56px;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.setup-card {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-main {
+  flex: 999 1 560px;
+  padding: 32px;
+  gap: 28px;
+}
+
+.setup-aside {
+  flex: 1 1 300px;
+  padding: 24px;
+  gap: 16px;
+}
+
+.setup-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setup-intro h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.setup-intro p {
+  margin: 0;
+  color: var(--text-sub);
+}
+
+.setup-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.setup-steps li {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.setup-steps li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setup-steps a {
+  font-size: 14px;
+  color: var(--accent);
+}
+.setup-steps a:hover {
+  color: var(--accent-hover);
+}
+.setup-num {
+  flex: 0 0 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e6ebfb;
+  color: var(--accent);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-step-title {
+  font-weight: 700;
+}
+.setup-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.setup-field label {
+  font-weight: 700;
+}
+.setup-field select {
+  height: 48px;
+  max-width: 420px;
+  width: 100%;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--input-border);
+  background: var(--card);
+  font: inherit;
+  color: var(--text);
+}
+
+.setup-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.setup-key-row input {
+  flex: 1 1 280px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid var(--input-border);
+  background: #fbfcfd;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.setup-eye {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text-sub);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.setup-btn {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.setup-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.setup-btn-outline {
+  border: 1px solid var(--accent);
+  background: var(--card);
+  color: var(--accent);
+}
+.setup-btn-primary {
+  border: 0;
+  padding: 0 28px;
+  background: var(--accent);
+  color: var(--card);
+}
+.setup-btn-danger {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--input-border);
+  background: var(--card);
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.setup-ok,
+.setup-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.setup-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.setup-error {
+  background: #fbe9e7;
+  color: var(--danger);
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #e6eaf0;
+}
+
+.setup-aside-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.setup-aside h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.setup-aside ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--text-sub);
+  font-size: 14px;
+}
+
+.setup :is(button, input, select, a):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* スマホ幅 */
+@media (max-width: 640px) {
+  .setup {
+    padding: 8px 16px 40px;
+  }
+  .setup-main {
+    padding: 20px;
+  }
+  .setup-intro h1 {
+    font-size: 22px;
+  }
+}

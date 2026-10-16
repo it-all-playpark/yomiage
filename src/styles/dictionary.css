@@ -1,0 +1,350 @@
+/* 読み辞書画面（docs/mock/Dictionary.dc.html） */
+.dict {
+  max-width: 1216px;
+  margin: 0 auto;
+  padding: 8px 32px 56px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dict-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dict-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dict-title h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.dict-title p {
+  margin: 0;
+  color: var(--text-sub);
+}
+.dict-io {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* file input はボタンから開く */
+.dict-file {
+  display: none;
+}
+
+.dict-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.dict-card h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.dict-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.dict-field {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dict-field label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.dict-field input,
+.dict-edit input {
+  height: 48px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid var(--input-border);
+  background: #fbfcfd;
+  font: inherit;
+  color: var(--text);
+  min-width: 0;
+}
+.dict :is(input[aria-invalid='true']) {
+  border-color: var(--danger);
+}
+
+.dict-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--card);
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+.dict-btn-outline {
+  min-height: 48px;
+  padding: 0 18px;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: inherit;
+  font-weight: 700;
+}
+.dict-btn-primary {
+  min-height: 48px;
+  padding: 0 28px;
+  border: 0;
+  background: var(--accent);
+  color: var(--card);
+  font-size: inherit;
+  font-weight: 700;
+}
+.dict button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.dict-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dict-count {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.dict-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dict-filter label {
+  font-size: 14px;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+.dict-filter input {
+  height: 44px;
+  width: 220px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: #fbfcfd;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.dict-table-wrap {
+  border: 1px solid #e6eaf0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.dict-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.dict-table thead tr {
+  background: #f3f5f8;
+  text-align: left;
+}
+.dict-table th {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 500;
+}
+.dict-table th.dict-ops-h {
+  text-align: right;
+}
+.dict-table tbody tr {
+  border-top: 1px solid #e6eaf0;
+}
+.dict-table td {
+  padding: 10px 16px;
+  vertical-align: middle;
+}
+.dict-word {
+  font-weight: 700;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.dict-reading {
+  color: var(--ai);
+  font-weight: 700;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.dict-source {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eef1f5;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+.dict-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dict-edit input {
+  width: 100%;
+  height: 44px;
+  font-weight: 400;
+}
+
+.dict-ops {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.dict-icon {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text-sub);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.dict-icon-play {
+  color: var(--accent);
+}
+.dict-icon-danger {
+  color: var(--danger);
+}
+.dict-text-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.dict-text-btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--card);
+  font-weight: 700;
+}
+
+.dict-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.dict-ok,
+.dict-error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.dict-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.dict-error {
+  background: #fbe9e7;
+  color: var(--danger);
+}
+.dict-error-inline {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--danger);
+}
+
+.dict :is(button, input):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* スマホ幅：表を 1 語 1 カードに組み替えて横スクロールを出さない */
+@media (max-width: 640px) {
+  .dict {
+    padding: 8px 16px 40px;
+  }
+  .dict-card {
+    padding: 16px;
+  }
+  .dict-title h1 {
+    font-size: 22px;
+  }
+  .dict-filter {
+    flex: 1 1 100%;
+  }
+  .dict-filter input {
+    flex: 1 1 auto;
+    width: auto;
+  }
+  .dict-table thead {
+    display: none;
+  }
+  .dict-table,
+  .dict-table tbody {
+    display: block;
+  }
+  .dict-table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 12px;
+  }
+  .dict-table tbody tr:first-child {
+    border-top: 0;
+  }
+  .dict-table td {
+    padding: 0;
+  }
+  .dict-table td:nth-child(3) {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+  .dict-table td:nth-child(2),
+  .dict-table td:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+  .dict-ops {
+    justify-content: flex-start;
+  }
+}
