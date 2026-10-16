@@ -209,6 +209,36 @@ describe('translateStream', () => {
     expect(got.map((s) => [s.i, s.ja])).toEqual([[0, '二。']]);
   });
 
+  it.each([
+    ['429', () => new Response('{}', { status: 429, headers: { 'retry-after': '17' } })],
+    ['通信エラー', () => new TypeError('Failed to fetch')],
+    ['JSON として読めない本文', () => new Response('<html>bad gateway</html>', { status: 200 })],
+  ])('再要求が %s でもその文だけ捨て、前後の文と後の段落を渡す', async (_, retry) => {
+    const p1 = sse(line(0, '一。') + '{"i":1,"ja":"二\n' + line(2, '三。')) + 'data: [DONE]\n\n';
+    const p2 = sse(line(0, '四。')) + 'data: [DONE]\n\n';
+    const { impl, calls } = fakeFetch([sseResponse(p1), retry(), sseResponse(p2)]);
+
+    const { got } = await run(impl, 'One. Two. Three.\n\nFour.');
+
+    expect(calls).toHaveLength(3);
+    expect(calls[1].body.stream).toBe(false);
+    expect(got.map((s) => [s.i, s.ja])).toEqual([
+      [0, '一。'],
+      [1, '三。'],
+      [2, '四。'],
+    ]);
+  });
+
+  it('再要求の途中で中断したら AbortError のまま投げる', async () => {
+    const ac = new AbortController();
+    const body = sse(line(0, '一。') + '{"i":1,"ja":"二\n' + line(2, '三。')) + 'data: [DONE]\n\n';
+    const { impl, calls } = fakeFetch([sseResponse(body), new DOMException('aborted', 'AbortError')]);
+    const err = await run(impl, 'a', DEFAULT_MODEL, ac.signal).catch((e) => e);
+    expect(calls).toHaveLength(2);
+    expect(isGroqError(err)).toBe(false);
+    expect((err as DOMException).name).toBe('AbortError');
+  });
+
   it('JSON でない前置き・後書きは文ではないので再要求せずに飛ばす', async () => {
     const body = sse('以下が翻訳です：\n' + line(0, '一。') + '以上です。') + 'data: [DONE]\n\n';
     const { impl, calls } = fakeFetch([sseResponse(body)]);

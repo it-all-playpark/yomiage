@@ -133,8 +133,15 @@ export async function translateStream(opts: {
         content: `次の原文を訳した出力のうち、1 行が JSON として壊れていました。その 1 文だけを正しい形式の JSON 1 行で出力し直してください。\n原文:\n${paragraph}\n壊れた行:\n${broken}`,
       },
     ];
-    const res = await post(messages, false);
-    const body = await res.json();
+    let body;
+    try {
+      const res = await post(messages, false);
+      body = await res.json();
+    } catch (e) {
+      // 中断は止める。429・通信エラー・JSON として読めない本文なら、その文だけ捨てて続ける
+      if (isAbort(e)) throw e;
+      return null;
+    }
     if (body?.usage) usages.push(body.usage);
     const content: unknown = body?.choices?.[0]?.message?.content;
     if (typeof content !== 'string') return null;
