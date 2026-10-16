@@ -44,7 +44,7 @@ describe('設定', () => {
 
   it('yomiage.settings に保存して読み戻す', async () => {
     const s = await load();
-    const v = { model: 'm', voiceURI: 'v', rate: 1.5, showAllRuby: true };
+    const v = { model: 'openai/gpt-oss-120b', voiceURI: 'v', rate: 1.5, showAllRuby: true };
     s.saveSettings(v);
     expect(JSON.parse(localStorage.getItem('yomiage.settings')!)).toEqual(v);
     expect(s.loadSettings()).toEqual(v);
@@ -54,8 +54,17 @@ describe('設定', () => {
     const s = await load();
     localStorage.setItem('yomiage.settings', '{broken');
     expect(s.loadSettings().model).toBe(DEFAULT_MODEL);
-    localStorage.setItem('yomiage.settings', JSON.stringify({ model: 'x', rate: 'fast', showAllRuby: 1 }));
-    expect(s.loadSettings()).toEqual({ model: 'x', voiceURI: '', rate: 1, showAllRuby: false });
+    localStorage.setItem('yomiage.settings', JSON.stringify({ model: 'openai/gpt-oss-120b', rate: 'fast', showAllRuby: 1 }));
+    expect(s.loadSettings()).toEqual({ model: 'openai/gpt-oss-120b', voiceURI: '', rate: 1, showAllRuby: false });
+  });
+
+  it('選択肢に無いモデル（提供が終わったものなど）は既定のモデルにし、ほかの項目は残す', async () => {
+    const s = await load();
+    localStorage.setItem(
+      'yomiage.settings',
+      JSON.stringify({ model: 'llama-3.3-70b-versatile', voiceURI: 'v', rate: 1.5, showAllRuby: true }),
+    );
+    expect(s.loadSettings()).toEqual({ model: DEFAULT_MODEL, voiceURI: 'v', rate: 1.5, showAllRuby: true });
   });
 });
 
@@ -204,7 +213,7 @@ describe('localStorage が使えない環境', () => {
     s.clearKey();
     expect(s.getKey()).toBeNull();
 
-    const settings = { model: 'm', voiceURI: 'v', rate: 2, showAllRuby: true };
+    const settings = { model: 'openai/gpt-oss-120b', voiceURI: 'v', rate: 2, showAllRuby: true };
     s.saveSettings(settings);
     expect(s.loadSettings()).toEqual(settings);
 

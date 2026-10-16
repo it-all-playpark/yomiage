@@ -1,6 +1,6 @@
 // localStorage への保存（spec §7）。使えない環境ではメモリに持ってその場限りで動く。
 import type { DictData, DictEntry, Settings } from '../types';
-import { DEFAULT_MODEL } from './groq';
+import { DEFAULT_MODEL, MODELS } from './groq';
 import { hasKanji } from './analyzer';
 
 const KEY_GROQ = 'yomiage.groqKey';
@@ -69,9 +69,9 @@ export function loadSettings(): Settings {
   const v = parseJson(read(KEY_SETTINGS));
   if (typeof v !== 'object' || v === null) return d;
   const o = v as Record<string, unknown>;
-  // 型が合う項目だけ採り、ほかは既定値
+  // 型が合う項目だけ採り、ほかは既定値。モデルは選択肢にあるものだけ（提供が終わったモデルは既定に戻す）
   return {
-    model: typeof o.model === 'string' && o.model !== '' ? o.model : d.model,
+    model: MODELS.some((m) => m.id === o.model) ? (o.model as string) : d.model,
     voiceURI: typeof o.voiceURI === 'string' ? o.voiceURI : d.voiceURI,
     rate: typeof o.rate === 'number' && Number.isFinite(o.rate) && o.rate > 0 ? o.rate : d.rate,
     showAllRuby: typeof o.showAllRuby === 'boolean' ? o.showAllRuby : d.showAllRuby,

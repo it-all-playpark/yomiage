@@ -47,10 +47,10 @@
 
 | 表示 | model | 備考 |
 |---|---|---|
-| 速さ重視（既定） | `llama-3.3-70b-versatile` | 推論をしないので最初の出力が速い |
+| 速さ重視（既定） | `openai/gpt-oss-20b` | `reasoning_effort: "low"` を付けて待ち時間を抑える。精度重視より小さいモデル |
 | 精度重視 | `openai/gpt-oss-120b` | `reasoning_effort: "low"` を付けて待ち時間を抑える |
 
-どちらも Groq で使えるかは実装時に `/models` で確かめる（§9）。
+どちらも Groq で使えるかは実装時に `/models` で確かめる（§9）。保存された設定のモデルがこの表に無いとき（提供が終わったモデルなど）は、読み込み時に既定のモデルに戻す。
 
 ### 3.3 出力形式（1 行 1 文の JSON = NDJSON）
 
@@ -173,6 +173,8 @@ interface Token {
 | V4 | 「押してから声が出るまで」の時間 | `performance.now()` で計測。Windows の Edge で 10 回 | モデルの既定や段落の分け方を見直す |
 | V5 | kuromoji の辞書の読み込み時間とサイズ | 初回と 2 回目（キャッシュあり）の時間を測る | 読み込みを後回しにし、届くまでは AI と辞書の読みだけで表示する |
 | V6 | 2 つのモデルが Groq で使えるか | `GET /models` | 使えるモデルに差し替える |
+
+- V6 の結果（2026-10）：当初の既定 `llama-3.3-70b-versatile` は、Groq の廃止一覧（https://console.groq.com/docs/deprecations）のとおり 2026-08-16 に無料・Developer プランでの提供が終わっていた。公開版の設定画面で「この key では llama-3.3-70b-versatile が使えないようです」と出た。同じ無料プランの key で `openai/gpt-oss-120b` を選ぶと翻訳できた。既定は `openai/gpt-oss-20b` に差し替えた（§3.2）。`openai/gpt-oss-20b` で V4 の時間と訳の質が足りるかは未計測で、足りなければ既定を `openai/gpt-oss-120b` にする
 
 ## 10. テスト
 

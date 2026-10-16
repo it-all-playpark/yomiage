@@ -1,0 +1,3 @@
+fix: 提供が終わった llama-3.3-70b-versatile を既定モデルから外し、gpt-oss-20b を既定にする (#3)
+
+fix: 提供が終わった llama-3.3-70b-versatile を既定モデルから外し、gpt-oss-20b を既定にする

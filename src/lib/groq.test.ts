@@ -74,10 +74,13 @@ async function run(fetchImpl: typeof fetch, text = 'Hello.', model = DEFAULT_MOD
 }
 
 describe('MODELS', () => {
-  it('速さ重視が既定でおすすめ、gpt-oss は reasoning_effort low', () => {
-    expect(DEFAULT_MODEL).toBe('llama-3.3-70b-versatile');
+  it('速さ重視の gpt-oss-20b が既定でおすすめ、どちらも reasoning_effort low', () => {
+    expect(DEFAULT_MODEL).toBe('openai/gpt-oss-20b');
     expect(MODELS.find((m) => m.recommended)?.id).toBe(DEFAULT_MODEL);
-    expect(MODELS.find((m) => m.id === 'openai/gpt-oss-120b')?.extra).toEqual({ reasoning_effort: 'low' });
+    expect(MODELS).toEqual([
+      { id: 'openai/gpt-oss-20b', label: '速さ重視', recommended: true, extra: { reasoning_effort: 'low' } },
+      { id: 'openai/gpt-oss-120b', label: '精度重視', recommended: false, extra: { reasoning_effort: 'low' } },
+    ]);
   });
 });
 
@@ -137,7 +140,6 @@ describe('translateStream', () => {
     expect(calls[0].url).toBe('https://api.groq.com/openai/v1/chat/completions');
     expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer gsk_test');
     expect(calls[0].body).toMatchObject({ model: DEFAULT_MODEL, stream: true });
-    expect(calls[0].body).not.toHaveProperty('reasoning_effort');
   });
 
   it('最後の行が改行で終わらなくても受け取る', async () => {
@@ -167,10 +169,16 @@ describe('translateStream', () => {
     expect((calls[1].body.messages as { content: string }[])[0].content).toContain('2 から');
   });
 
-  it('gpt-oss では reasoning_effort: low を付けて送る', async () => {
+  it.each(['openai/gpt-oss-20b', 'openai/gpt-oss-120b'])('%s では reasoning_effort: low を付けて送る', async (model) => {
     const { impl, calls } = fakeFetch([sseResponse(sse(line(0, 'あ。')) + 'data: [DONE]\n\n')]);
-    await run(impl, 'a', 'openai/gpt-oss-120b');
-    expect(calls[0].body).toMatchObject({ model: 'openai/gpt-oss-120b', reasoning_effort: 'low' });
+    await run(impl, 'a', model);
+    expect(calls[0].body).toMatchObject({ model, reasoning_effort: 'low' });
+  });
+
+  it('選択肢に無いモデルには reasoning_effort を付けない', async () => {
+    const { impl, calls } = fakeFetch([sseResponse(sse(line(0, 'あ。')) + 'data: [DONE]\n\n')]);
+    await run(impl, 'a', 'some-other-model');
+    expect(calls[0].body).not.toHaveProperty('reasoning_effort');
   });
 
   it('壊れた行はその文だけ再要求し、順番どおりに渡す', async () => {
@@ -282,8 +290,8 @@ describe('toGroqError', () => {
 
 describe('testConnection', () => {
   it('成功なら使えるモデルの一覧を返す', async () => {
-    const { impl, calls } = fakeFetch([Response.json({ data: [{ id: 'llama-3.3-70b-versatile' }, { id: 'openai/gpt-oss-120b' }] })]);
-    expect(await testConnection('gsk_x', impl)).toEqual({ ok: true, models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'] });
+    const { impl, calls } = fakeFetch([Response.json({ data: [{ id: 'openai/gpt-oss-20b' }, { id: 'openai/gpt-oss-120b' }] })]);
+    expect(await testConnection('gsk_x', impl)).toEqual({ ok: true, models: ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'] });
     expect(calls[0].url).toBe('https://api.groq.com/openai/v1/models');
     expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer gsk_x');
   });

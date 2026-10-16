@@ -57,7 +57,7 @@ function makeEnv(fetchImpl: typeof fetch, opts: { dict?: DictData; analyzer?: An
   return { env, sp, setAnalyzer: (x: Analyzer) => (a = x) };
 }
 
-const REQ = { key: 'gsk_x', model: 'llama-3.3-70b-versatile', text: 'Xi met the PM.\n\nXi spoke.', sourceLang: 'auto' };
+const REQ = { key: 'gsk_x', model: 'openai/gpt-oss-20b', text: 'Xi met the PM.\n\nXi spoke.', sourceLang: 'auto' };
 
 const S0 = { i: 0, ja: '習近平は会談した。', readings: [{ w: '習近平', r: 'しゅうきんぺい' }] };
 const S1 = { i: 0, ja: '習近平が話した。', readings: [] };
