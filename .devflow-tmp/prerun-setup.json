@@ -1,0 +1,84 @@
+{
+  "ok": true,
+  "issue": 4,
+  "repo": "it-all-playpark/yomiage",
+  "base": "main",
+  "base_source": "origin/HEAD",
+  "worktree": "/Users/naramotoyuuji/ghq/github.com/it-all-playpark/yomiage/.claude/worktrees/df-4",
+  "branch": "feature/issue-4",
+  "head": "639d0f8c7c9ec17a60c553c2256da618e51c6653",
+  "worktree_status": "created",
+  "worktree_removed": false,
+  "skip_worktree": [],
+  "clean": {
+    "ok": true
+  },
+  "stack": {
+    "frameworks": [],
+    "test_runners": [
+      {
+        "runner": "vitest",
+        "accept": [
+          "*.test.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+          "*.spec.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+          "__tests__/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+        ],
+        "exclude": [],
+        "command": "pnpm exec vitest run <files>"
+      },
+      {
+        "runner": "bats",
+        "accept": [
+          "*.bats"
+        ],
+        "exclude": [],
+        "command": "bats <files>"
+      }
+    ]
+  },
+  "analyze": {
+    "ok": true,
+    "analyze_path": "contract",
+    "jev_reasons": [],
+    "issue_title": "fix: 壊れた行の取り直しが失敗しても翻訳全体を止めず、その 1 文だけ捨てる",
+    "issue_type": "fix",
+    "acceptance_criteria": [
+      "AC-1 ストリームの途中に壊れた JSON の行があり、その取り直しのリクエストが 429 を返すとき、`translateStream` は reject せず、壊れた行の前後にある正しい文をすべて `onSentence` に渡して resolve する。文番号 `i` は 0 から欠番なしの通し番号になる。`src/lib/groq.test.ts` で確かめる",
+      "AC-2 取り直しのリクエストが通信エラー（fetch の reject）になる場合と、応答の本文が JSON として読めない場合も、AC-1 と同じく残りの文を渡して resolve する。`src/lib/groq.test.ts` で確かめる",
+      "AC-3 取り直しの途中で `signal` が中断されたとき（fetch が `AbortError` で reject したとき）は、これまでどおり `translateStream` が `AbortError` で reject する。`src/lib/groq.test.ts` で確かめる",
+      "AC-4 段落の最初のストリーミングのリクエストが 401・429・通信エラーになるときは、これまでどおり `translateStream` が対応する `GroqError` で reject する（既存テストが通る）。`pnpm typecheck`・`pnpm test`・`pnpm build` がすべて通る"
+    ],
+    "scope": "## ゴール\n翻訳の受信中に壊れた 1 行が来て、その取り直しが失敗しても、その 1 文だけを捨てて残りの文を受け取り続けるようにする。今は取り直しが失敗すると、受信中だった段落の残りの文も後の段落の文も届かない。\n\n## なぜ\n- `src/lib/groq.ts` の `retryLine` では、`post(messages, false)` が 429・通信エラー・その他の HTTP エラーで `GroqError` を投げる。`res.json()` が失敗したときも例外を投げる。どちらも `handleLine` を通って `translateStream` まで伝わり、翻訳全体が失敗として終わる\n- `handleLine` のコメント「再要求でも駄目ならその文は捨てる」とも、spec §3.3「パースできない行は捨てて、その文だけ再要求する」とも合わない\n- 1 分あたりのトークン上限がある無料プランでは、取り直しのリクエストだけが 429 になることが起こりうる\n- PR #2 のレビュー（https://github.com/it-all-playpark/yomiage/pull/2#issuecomment-6226181251）の minor 指摘 1 件目\n\n## 制約・取らないこと\n- 取り直しは 1 文につき 1 回のまま。リトライの回数や待ち時間（retry-after を待って再送するなど）は足さない\n- 取り直しに失敗した文を画面で知らせる仕組みは作らない（`translateStream` の引数と返り値の形を変えない）\n- `toGroqError` の文言と、段落のストリーミングのリクエストのエラー処理は変えない\n\n## 変更対象パス\n- src/lib/groq.ts\n- src/lib/groq.test.ts\n\n## 未解決事項（Open Questions）\n- なし",
+    "scope_truncated": false,
+    "scope_total_chars": 823,
+    "issue_body": "## ゴール\n翻訳の受信中に壊れた 1 行が来て、その取り直しが失敗しても、その 1 文だけを捨てて残りの文を受け取り続けるようにする。今は取り直しが失敗すると、受信中だった段落の残りの文も後の段落の文も届かない。\n\n## なぜ\n- `src/lib/groq.ts` の `retryLine` では、`post(messages, false)` が 429・通信エラー・その他の HTTP エラーで `GroqError` を投げる。`res.json()` が失敗したときも例外を投げる。どちらも `handleLine` を通って `translateStream` まで伝わり、翻訳全体が失敗として終わる\n- `handleLine` のコメント「再要求でも駄目ならその文は捨てる」とも、spec §3.3「パースできない行は捨てて、その文だけ再要求する」とも合わない\n- 1 分あたりのトークン上限がある無料プランでは、取り直しのリクエストだけが 429 になることが起こりうる\n- PR #2 のレビュー（https://github.com/it-all-playpark/yomiage/pull/2#issuecomment-6226181251）の minor 指摘 1 件目\n\n## 受け入れ基準（Acceptance Criteria）\n- [ ] AC-1 ストリームの途中に壊れた JSON の行があり、その取り直しのリクエストが 429 を返すとき、`translateStream` は reject せず、壊れた行の前後にある正しい文をすべて `onSentence` に渡して resolve する。文番号 `i` は 0 から欠番なしの通し番号になる。`src/lib/groq.test.ts` で確かめる\n- [ ] AC-2 取り直しのリクエストが通信エラー（fetch の reject）になる場合と、応答の本文が JSON として読めない場合も、AC-1 と同じく残りの文を渡して resolve する。`src/lib/groq.test.ts` で確かめる\n- [ ] AC-3 取り直しの途中で `signal` が中断されたとき（fetch が `AbortError` で reject したとき）は、これまでどおり `translateStream` が `AbortError` で reject する。`src/lib/groq.test.ts` で確かめる\n- [ ] AC-4 段落の最初のストリーミングのリクエストが 401・429・通信エラーになるときは、これまでどおり `translateStream` が対応する `GroqError` で reject する（既存テストが通る）。`pnpm typecheck`・`pnpm test`・`pnpm build` がすべて通る\n\n## 制約・取らないこと\n- 取り直しは 1 文につき 1 回のまま。リトライの回数や待ち時間（retry-after を待って再送するなど）は足さない\n- 取り直しに失敗した文を画面で知らせる仕組みは作らない（`translateStream` の引数と返り値の形を変えない）\n- `toGroqError` の文言と、段落のストリーミングのリクエストのエラー処理は変えない\n\n## 変更対象パス\n- src/lib/groq.ts\n- src/lib/groq.test.ts\n\n## 未解決事項（Open Questions）\n- なし",
+    "issue_body_truncated": false,
+    "breaking_keyword_scan": false,
+    "breaking_change": false,
+    "breaking_evidence": "",
+    "comment_count": 0,
+    "comment_overrides": [],
+    "comment_conflicts": [],
+    "uncertain": [],
+    "ac_observational": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "ac_observational_evidence": [
+      "正規表現の絞り込みに当たらない",
+      "正規表現の絞り込みに当たらない",
+      "正規表現の絞り込みに当たらない",
+      "正規表現の絞り込みに当たらない"
+    ],
+    "blockers": [],
+    "contract": "t1",
+    "ac_heading_near_miss": [],
+    "duration_seconds": 3
+  },
+  "ci_verify": null,
+  "local_verify": null,
+  "epoch": 1792192668,
+  "plugin_commit": "b5bdeadcc4b8"
+}
