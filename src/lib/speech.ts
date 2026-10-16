@@ -49,13 +49,17 @@ export class Speaker {
   ) {}
 
   setVoice(voiceURI: string): void {
+    const changed = voiceURI !== this.voiceURI;
     this.voiceURI = voiceURI;
     // 声が変われば boundary が来るかも変わる
     this.update({ boundarySupported: false, tokenId: null });
+    if (changed) this.respeakCurrent();
   }
 
   setRate(rate: number): void {
+    if (rate === this.rate) return;
     this.rate = rate;
+    this.respeakCurrent();
   }
 
   setSentence(index: number, st: SpeechText): void {
@@ -141,6 +145,15 @@ export class Speaker {
     return () => {
       this.listeners.delete(cb);
     };
+  }
+
+  // 積み済みの発話には声・速さが効かないので、今の文から積み直す。一時停止扱い中は play で parked から読むので何もしない
+  private respeakCurrent(): void {
+    if (!this.state.playing || this.parked !== null) return;
+    if (this.state.paused) {
+      this.halt();
+      this.park(this.head);
+    } else this.startFrom(this.head);
   }
 
   private startFrom(index: number): void {

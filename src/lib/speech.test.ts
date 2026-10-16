@@ -146,6 +146,105 @@ describe('Speaker', () => {
     expect(synth.current.voice?.voiceURI).toBe('nanami');
   });
 
+  it('読み上げ中に声を変えると、今の文から新しい声で積み直す', () => {
+    speaker.setVoice('haruka');
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.setSentence(2, st('う'));
+    speaker.play();
+    synth.end();
+    expect(state.sentence).toBe(1);
+
+    speaker.setVoice('nanami');
+    expect(synth.texts).toEqual(['い', 'う']);
+    expect(synth.queue.map((u) => u.voice?.voiceURI)).toEqual(['nanami', 'nanami']);
+    expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+  });
+
+  it('読み上げ中に速さを変えると、今の文から新しい速さで積み直す', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.setSentence(2, st('う'));
+    speaker.play();
+    synth.end();
+
+    speaker.setRate(1.5);
+    expect(synth.texts).toEqual(['い', 'う']);
+    expect(synth.queue.map((u) => u.rate)).toEqual([1.5, 1.5]);
+    expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+  });
+
+  it('一時停止中に声・速さを変えると、再開したとき今の文から新しい声・速さで読む', () => {
+    speaker.setVoice('haruka');
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.play();
+    synth.end();
+    speaker.pause();
+
+    speaker.setVoice('nanami');
+    speaker.setRate(1.5);
+    expect(synth.texts).toEqual([]);
+    expect(state).toMatchObject({ playing: true, paused: true, sentence: 1 });
+
+    speaker.play();
+    expect(synth.texts).toEqual(['い']);
+    expect(synth.current).toMatchObject({ rate: 1.5 });
+    expect(synth.current.voice?.voiceURI).toBe('nanami');
+    expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+  });
+
+  it('respeakFrom で一時停止扱いの間に声・速さを変えても読み始めず、再開したときその文から新しい声・速さで読む', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.play();
+    speaker.pause();
+    speaker.respeakFrom(1);
+
+    speaker.setVoice('nanami');
+    speaker.setRate(1.5);
+    expect(synth.texts).toEqual([]);
+    expect(state).toMatchObject({ playing: true, paused: true, sentence: 1 });
+
+    speaker.play();
+    expect(synth.texts).toEqual(['い']);
+    expect(synth.current).toMatchObject({ rate: 1.5 });
+    expect(synth.current.voice?.voiceURI).toBe('nanami');
+  });
+
+  it('試聴中に声・速さを変えても試聴は続け、終われば今の文から新しい声・速さで読む', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.play();
+    synth.end();
+    speaker.preview('いい');
+
+    speaker.setVoice('nanami');
+    speaker.setRate(1.5);
+    expect(synth.texts).toEqual(['いい']);
+    expect(state).toMatchObject({ playing: true, paused: true, sentence: 1 });
+
+    synth.end();
+    expect(synth.texts).toEqual(['い']);
+    expect(synth.current).toMatchObject({ rate: 1.5 });
+    expect(synth.current.voice?.voiceURI).toBe('nanami');
+  });
+
+  it('止まっているときや、今と同じ値で声・速さを設定したときは積み直さない', () => {
+    speaker.setVoice('haruka');
+    speaker.setSentence(0, st('あ'));
+    speaker.setVoice('nanami');
+    speaker.setRate(1.5);
+    expect(synth.spoken).toEqual([]);
+
+    speaker.play();
+    expect(synth.spoken).toHaveLength(1);
+    speaker.setVoice('nanami');
+    speaker.setRate(1.5);
+    expect(synth.spoken).toHaveLength(1);
+    expect(state).toMatchObject({ playing: true, sentence: 0 });
+  });
+
   it('boundary の charIndex を対応表でトークン id に変える', () => {
     speaker.setSentence(0, {
       text: 'しゅうきんぺいは',
