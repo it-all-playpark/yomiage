@@ -76,7 +76,10 @@ describe('translate', () => {
     const { env, sp } = makeEnv(fetchImpl as unknown as typeof fetch);
     await translate(REQ, env);
 
-    expect(sentences.value.map((s) => s.i)).toEqual([0, 1]);
+    expect(sentences.value.map((s) => [s.i, s.p])).toEqual([
+      [0, 0],
+      [1, 1],
+    ]);
     const t = sentences.value[0].tokens.find((x) => x.text === '習近平');
     expect(t).toMatchObject({ fix: 'ai', reading: 'しゅうきんぺい' });
     // 2 文目は段落が別でも通し番号。id も文で分かれる

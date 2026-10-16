@@ -222,6 +222,18 @@ describe('Main', () => {
     expect(document.querySelector('.main-text')?.textContent).toContain('しゅうきんぺいは会談した。');
   });
 
+  it('訳文は原文の段落ごとに分けて表示する', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sseResponse([{ i: 0, ja: '一。', readings: [] }, { i: 1, ja: '二。', readings: [] }]))
+      .mockResolvedValueOnce(sseResponse([{ i: 0, ja: '三。', readings: [] }]));
+    render(<Main />);
+    const ta = screen.getByLabelText('翻訳する文章');
+    fireEvent.input(ta, { target: { value: 'One. Two.\n\nThree.' } });
+    fireEvent.keyDown(ta, { key: 'Enter', ctrlKey: true });
+    await waitFor(() => expect(document.querySelector('.main-receiving')).toBeNull());
+    expect([...document.querySelectorAll('.main-text > p')].map((p) => p.textContent)).toEqual(['一。二。', '三。']);
+  });
+
   it('ふりがなをすべて表示で、自動解析の語にもルビが付く（設定に保存）', async () => {
     await translateOnce();
     // 解析器が後から届くと全文を作り直す

@@ -60,6 +60,7 @@ function fakeFetch(responses: (Response | Error | DOMException)[]) {
 
 async function run(fetchImpl: typeof fetch, text = 'Hello.', model = DEFAULT_MODEL, signal?: AbortSignal) {
   const got: Sentence[] = [];
+  const paras: number[] = [];
   const result = await translateStream({
     key: 'gsk_test',
     model,
@@ -67,10 +68,13 @@ async function run(fetchImpl: typeof fetch, text = 'Hello.', model = DEFAULT_MOD
     sourceLang: 'auto',
     dict: [],
     signal,
-    onSentence: (s) => got.push(s),
+    onSentence: (s, p) => {
+      got.push(s);
+      paras.push(p);
+    },
     fetchImpl,
   });
-  return { got, result };
+  return { got, paras, result };
 }
 
 describe('MODELS', () => {
@@ -154,13 +158,15 @@ describe('translateStream', () => {
     const p2 = sse(line(0, '三。')) + 'data: [DONE]\n\n';
     const { impl, calls } = fakeFetch([sseResponse(p1), sseResponse(p2)]);
 
-    const { got } = await run(impl, 'One. Two.\n\nThree.');
+    const { got, paras } = await run(impl, 'One. Two.\n\nThree.');
 
     expect(got.map((s) => [s.i, s.ja])).toEqual([
       [0, '一。'],
       [1, '二。'],
       [2, '三。'],
     ]);
+    // 訳文を原文と同じ段落に分けられるよう、文ごとに段落番号を渡す
+    expect(paras).toEqual([0, 0, 1]);
     expect(calls).toHaveLength(2);
     const user = (c: Call) => (c.body.messages as { role: string; content: string }[])[1].content;
     expect(user(calls[0])).toBe('One. Two.');
