@@ -5,11 +5,11 @@ import { LineBuffer, parseSentenceLine, parseSseData } from './ndjson';
 const API = 'https://api.groq.com/openai/v1';
 
 export const MODELS: { id: string; label: string; recommended: boolean; extra?: Record<string, unknown> }[] = [
-  { id: 'llama-3.3-70b-versatile', label: '速さ重視', recommended: true },
+  { id: 'openai/gpt-oss-20b', label: '速さ重視', recommended: true, extra: { reasoning_effort: 'low' } },
   { id: 'openai/gpt-oss-120b', label: '精度重視', recommended: false, extra: { reasoning_effort: 'low' } },
 ];
 
-export const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+export const DEFAULT_MODEL = 'openai/gpt-oss-20b';
 
 type Message = { role: 'system' | 'user'; content: string };
 type DictHint = { word: string; reading: string };

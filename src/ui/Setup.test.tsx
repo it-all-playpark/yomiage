@@ -7,7 +7,7 @@ vi.mock('../state', async () => {
   const { signal } = await import('@preact/signals');
   return {
     apiKey: signal<string | null>(null),
-    settings: signal({ model: 'llama-3.3-70b-versatile', voiceURI: '', rate: 1, showAllRuby: false }),
+    settings: signal({ model: 'openai/gpt-oss-20b', voiceURI: '', rate: 1, showAllRuby: false }),
     navigate: vi.fn(),
   };
 });
@@ -22,7 +22,7 @@ function typeKey(v: string) {
 
 beforeEach(() => {
   apiKey.value = null;
-  settings.value = { model: 'llama-3.3-70b-versatile', voiceURI: '', rate: 1, showAllRuby: false };
+  settings.value = { model: 'openai/gpt-oss-20b', voiceURI: '', rate: 1, showAllRuby: false };
   vi.mocked(navigate).mockClear();
 });
 
@@ -54,7 +54,7 @@ describe('Setup', () => {
   });
 
   it('接続テストに成功すると知らせを出し、key を保存する', async () => {
-    const fetchMock = vi.fn(async () => okResponse(['llama-3.3-70b-versatile', 'openai/gpt-oss-120b']));
+    const fetchMock = vi.fn(async () => okResponse(['openai/gpt-oss-20b', 'openai/gpt-oss-120b']));
     vi.stubGlobal('fetch', fetchMock);
     render(<Setup />);
     typeKey('  gsk_new  ');
@@ -82,7 +82,7 @@ describe('Setup', () => {
     typeKey('gsk_x');
     fireEvent.click(screen.getByRole('button', { name: '接続をテスト' }));
     await screen.findByText('接続できました。この key で翻訳できます。');
-    expect(screen.getByRole('alert').textContent).toContain('llama-3.3-70b-versatile が使えない');
+    expect(screen.getByRole('alert').textContent).toContain('openai/gpt-oss-20b が使えない');
   });
 
   it('key が空のうちは接続テストと保存を押せない', () => {
@@ -94,7 +94,7 @@ describe('Setup', () => {
   it('モデルを選ぶと設定に入る。速さ重視がおすすめ', () => {
     render(<Setup />);
     const select = screen.getByLabelText('翻訳に使うモデル') as HTMLSelectElement;
-    expect(select.value).toBe('llama-3.3-70b-versatile');
+    expect(select.value).toBe('openai/gpt-oss-20b');
     expect(select.options[0].textContent).toContain('おすすめ');
     fireEvent.change(select, { target: { value: 'openai/gpt-oss-120b' } });
     expect(settings.value.model).toBe('openai/gpt-oss-120b');

@@ -70,9 +70,9 @@ describe('保存', () => {
   });
 
   it('保存済みの値を起動時に読み込む', async () => {
-    localStorage.setItem('yomiage.settings', JSON.stringify({ model: 'm', voiceURI: 'v', rate: 2, showAllRuby: true }));
+    localStorage.setItem('yomiage.settings', JSON.stringify({ model: 'openai/gpt-oss-120b', voiceURI: 'v', rate: 2, showAllRuby: true }));
     const s = await load();
-    expect(s.settings.value).toEqual({ model: 'm', voiceURI: 'v', rate: 2, showAllRuby: true });
+    expect(s.settings.value).toEqual({ model: 'openai/gpt-oss-120b', voiceURI: 'v', rate: 2, showAllRuby: true });
     expect(s.storageOk).toBe(true);
   });
 
