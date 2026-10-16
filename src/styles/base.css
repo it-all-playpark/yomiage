@@ -1,0 +1,230 @@
+/* 共通のトークン・ボタン・ヘッダー（docs/mock/README.md の見た目の決まり） */
+:root {
+  --font: 'Zen Kaku Gothic New', 'Yu Gothic UI', sans-serif;
+  --bg: #f3f5f8;
+  --card: #ffffff;
+  --border: #dce1e8;
+  --input-border: #c9d0da;
+  --text: #16202a;
+  --text-sub: #3e4a59;
+  --text-muted: #556170;
+  --accent: #2f4bd8;
+  --accent-hover: #1f35a8;
+  --ai: #b4410c;
+  --speaking-bg: #ffe58a;
+  --ok: #1d5e3f;
+  --ok-bg: #e3f1ea;
+  --ok-dot: #1f8a5b;
+  --warn: #8a2f05;
+  --warn-bg: #fce9dd;
+  --warn-dot: #c2410c;
+  --danger: #a1281b;
+  --radius-card: 16px;
+  --radius: 10px;
+  --tap: 44px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+a {
+  color: var(--accent);
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+rt {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* カード */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  min-width: 0;
+}
+
+/* ボタン */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--input-border);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: #ffffff;
+}
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* 入力 */
+.input,
+.select {
+  min-height: var(--tap);
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  max-width: 100%;
+}
+
+/* 保存できない環境の知らせ */
+.storage-banner {
+  padding: 12px 16px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-weight: 500;
+  text-align: center;
+}
+
+/* ヘッダー */
+.site-header {
+  max-width: 1216px;
+  margin: 0 auto;
+  padding: 20px 32px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.site-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.site-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: var(--text-sub);
+  text-decoration: none;
+}
+.site-nav a[aria-current='page'] {
+  background: var(--card);
+  color: var(--text);
+  font-weight: 700;
+}
+.key-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.key-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.key-chip--ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.key-chip--ok .key-chip-dot {
+  background: var(--ok-dot);
+}
+.key-chip--none {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.key-chip--none .key-chip-dot {
+  background: var(--warn-dot);
+}
+
+/* スマホ幅：メニューは縦に並べる（NFR-5） */
+@media (max-width: 600px) {
+  .site-header {
+    padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .site-nav {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .key-chip {
+    align-self: flex-start;
+  }
+}
