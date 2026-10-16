@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sentence } from '../types';
 import {
   DEFAULT_MODEL,
   MODELS,
+  CHUNK_CHARS,
   buildMessages,
+  chunkParagraphs,
   isGroqError,
   splitParagraphs,
   testConnection,
@@ -41,6 +43,11 @@ function sseResponse(body: string, cuts?: number[]): Response {
 
 function line(i: number, ja: string, readings: { w: string; r: string }[] = []): string {
   return JSON.stringify({ i, ja, readings }) + '\n';
+}
+
+/** 1 つで CHUNK_CHARS を超える段落（後ろの段落とまとまらない） */
+function long(s: string): string {
+  return s + ' x'.repeat(CHUNK_CHARS / 2);
 }
 
 type Call = { url: string; init: RequestInit; body: Record<string, unknown> };
@@ -148,13 +155,23 @@ describe('translateStream', () => {
     expect(got.map((s) => s.ja)).toEqual(['終わり。']);
   });
 
-  it('段落ごとに順に送り、文番号は全段落通しで 0 から振る', async () => {
-    // モデルは段落ごとに 0 から数えてしまっても、通し番号にする
+  it('短い段落はまとめて 1 回で送る', async () => {
+    const { impl, calls } = fakeFetch([sseResponse(sse(line(0, '一。') + line(1, '二。') + line(2, '三。')) + 'data: [DONE]\n\n')]);
+
+    const { got } = await run(impl, 'One.\n\nTwo.\n\nThree.');
+
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。', '三。']);
+    expect(calls).toHaveLength(1);
+    expect((calls[0].body.messages as { content: string }[])[1].content).toBe('One.\n\nTwo.\n\nThree.');
+  });
+
+  it('塊ごとに順に送り、文番号は全塊通しで 0 から振る', async () => {
+    // モデルは塊ごとに 0 から数えてしまっても、通し番号にする
     const p1 = sse(line(0, '一。') + line(1, '二。')) + 'data: [DONE]\n\n';
     const p2 = sse(line(0, '三。')) + 'data: [DONE]\n\n';
     const { impl, calls } = fakeFetch([sseResponse(p1), sseResponse(p2)]);
 
-    const { got } = await run(impl, 'One. Two.\n\nThree.');
+    const { got } = await run(impl, `${long('One. Two.')}\n\nThree.`);
 
     expect(got.map((s) => [s.i, s.ja])).toEqual([
       [0, '一。'],
@@ -163,9 +180,9 @@ describe('translateStream', () => {
     ]);
     expect(calls).toHaveLength(2);
     const user = (c: Call) => (c.body.messages as { role: string; content: string }[])[1].content;
-    expect(user(calls[0])).toBe('One. Two.');
+    expect(user(calls[0])).toBe(long('One. Two.'));
     expect(user(calls[1])).toBe('Three.');
-    // 2 段落目は 2 番から始めるよう指示する
+    // 2 つ目の塊は 2 番から始めるよう指示する
     expect((calls[1].body.messages as { content: string }[])[0].content).toContain('2 から');
   });
 
@@ -210,15 +227,16 @@ describe('translateStream', () => {
   });
 
   it.each([
-    ['429', () => new Response('{}', { status: 429, headers: { 'retry-after': '17' } })],
+    ['待ち時間の分からない 429', () => new Response('{}', { status: 429 })],
+    ['1 日の枠の 429', () => new Response('{}', { status: 429, headers: { 'retry-after': '3600', 'x-ratelimit-remaining-requests': '0' } })],
     ['通信エラー', () => new TypeError('Failed to fetch')],
     ['JSON として読めない本文', () => new Response('<html>bad gateway</html>', { status: 200 })],
-  ])('再要求が %s でもその文だけ捨て、前後の文と後の段落を渡す', async (_, retry) => {
+  ])('再要求が %s でもその文だけ捨て、前後の文と後の塊を渡す', async (_, retry) => {
     const p1 = sse(line(0, '一。') + '{"i":1,"ja":"二\n' + line(2, '三。')) + 'data: [DONE]\n\n';
     const p2 = sse(line(0, '四。')) + 'data: [DONE]\n\n';
     const { impl, calls } = fakeFetch([sseResponse(p1), retry(), sseResponse(p2)]);
 
-    const { got } = await run(impl, 'One. Two. Three.\n\nFour.');
+    const { got } = await run(impl, `${long('One. Two. Three.')}\n\nFour.`);
 
     expect(calls).toHaveLength(3);
     expect(calls[1].body.stream).toBe(false);
@@ -258,13 +276,78 @@ describe('translateStream', () => {
     await expect(run(impl)).rejects.toEqual({ kind: 'auth', message: 'key が使えません' });
   });
 
-  it('429 は retry-after の秒数を持つ rate の GroqError', async () => {
-    const { impl } = fakeFetch([new Response('{}', { status: 429, headers: { 'retry-after': '17' } })]);
+  describe('1 分の枠の 429', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const minute = () => new Response('{}', { status: 429, headers: { 'retry-after': '17', 'x-ratelimit-remaining-tokens': '0' } });
+
+    it('retry-after だけ待ってから同じ要求を送り直し、待つ間は onWait に秒数を渡す', async () => {
+      const { impl, calls } = fakeFetch([minute(), sseResponse(sse(line(0, '一。')) + 'data: [DONE]\n\n')]);
+      const waits: (number | null)[] = [];
+      const got: Sentence[] = [];
+      const p = translateStream({
+        key: 'k',
+        model: DEFAULT_MODEL,
+        text: 'One.',
+        sourceLang: 'auto',
+        dict: [],
+        onSentence: (s) => got.push(s),
+        onWait: (sec) => waits.push(sec),
+        fetchImpl: impl,
+      });
+
+      await vi.advanceTimersByTimeAsync(16_999);
+      expect(calls).toHaveLength(1);
+      expect(waits).toEqual([17]);
+      await vi.advanceTimersByTimeAsync(1);
+      await p;
+
+      expect(calls).toHaveLength(2);
+      expect(calls[1].body).toEqual(calls[0].body);
+      expect(waits).toEqual([17, null]);
+      expect(got.map((s) => s.ja)).toEqual(['一。']);
+    });
+
+    it('続けて 3 回待っても空かなければ rate の GroqError を投げる', async () => {
+      const { impl, calls } = fakeFetch([minute(), minute(), minute(), minute()]);
+      const p = run(impl).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(17_000 * 3);
+      const err = await p;
+      expect(calls).toHaveLength(4);
+      expect(err).toMatchObject({ kind: 'rate', scope: 'minute', retryAfterSec: 17 });
+      expect(err.message).toContain('1 分あたりの上限');
+    });
+
+    it('待っている間に中断したら送り直さず AbortError を投げる', async () => {
+      const ac = new AbortController();
+      const { impl, calls } = fakeFetch([minute()]);
+      const p = run(impl, 'a', DEFAULT_MODEL, ac.signal).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(1000);
+      ac.abort();
+      const err = await p;
+      await vi.advanceTimersByTimeAsync(17_000);
+      expect(calls).toHaveLength(1);
+      expect((err as DOMException).name).toBe('AbortError');
+    });
+  });
+
+  it('1 日の枠の 429 は待たずに投げる', async () => {
+    const { impl, calls } = fakeFetch([
+      new Response('{}', { status: 429, headers: { 'retry-after': '5400', 'x-ratelimit-remaining-requests': '0' } }),
+    ]);
     const err = await run(impl).catch((e) => e);
-    expect(isGroqError(err)).toBe(true);
-    expect(err).toMatchObject({ kind: 'rate', retryAfterSec: 17 });
-    expect(err.message).toContain('Groq の無料枠の上限に達しました');
-    expect(err.message).toContain('17 秒');
+    expect(calls).toHaveLength(1);
+    expect(err).toEqual({
+      kind: 'rate',
+      scope: 'day',
+      retryAfterSec: 5400,
+      message: 'Groq の無料枠の 1 日の上限に達しました。時間をおいて再実行してください（約 1 時間 30 分後に再実行できます）',
+    });
   });
 
   it('通信エラーは network の GroqError', async () => {
@@ -315,6 +398,35 @@ describe('toGroqError', () => {
     });
     expect(toGroqError('network')).toEqual({ kind: 'network', message: 'Groq に接続できません' });
     expect(toGroqError(500)).toMatchObject({ kind: 'other' });
+  });
+
+  it.each([
+    // x-ratelimit-*-requests は 1 日の要求数、*-tokens は 1 分のトークン数
+    [{ 'retry-after': '40', 'x-ratelimit-remaining-requests': '0', 'x-ratelimit-remaining-tokens': '0' }, 'day', '約 40 秒後'],
+    [{ 'retry-after': '7', 'x-ratelimit-remaining-tokens': '0' }, 'minute', '約 7 秒後'],
+    // どちらも残っていれば待ち時間の長さで分ける
+    [{ 'retry-after': '60' }, 'minute', '約 1 分後'],
+    [{ 'retry-after': '61' }, 'day', '約 2 分後'],
+    [{ 'retry-after': '7200' }, 'day', '約 2 時間後'],
+  ])('429 %o は %s の枠', (headers, scope, wait) => {
+    const e = toGroqError(429, new Headers(headers));
+    expect(e).toMatchObject({ kind: 'rate', scope, retryAfterSec: Number(headers['retry-after']) });
+    expect(e.message).toContain(scope === 'minute' ? '1 分あたりの上限' : '1 日の上限');
+    expect(e.message).toContain(wait);
+  });
+
+  it('429 で待ち時間も残量も分からなければ枠を決めない', () => {
+    expect(toGroqError(429, new Headers())).not.toHaveProperty('scope');
+  });
+});
+
+describe('chunkParagraphs', () => {
+  it('段落を max 文字までまとめ、超える段落は 1 つで 1 塊にする', () => {
+    expect(chunkParagraphs('aaa\n\nbb\n\ncccccccc\n\nd\n\ne', 7)).toEqual(['aaa\n\nbb', 'cccccccc', 'd\n\ne']);
+  });
+
+  it('空文字は塊なし', () => {
+    expect(chunkParagraphs(' \n\n ')).toEqual([]);
   });
 });
 

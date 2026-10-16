@@ -23,6 +23,27 @@ export function splitParagraphs(text: string): string[] {
     .filter((p) => p !== '');
 }
 
+/** 1 回の要求に入れる原文の目安（文字数） */
+export const CHUNK_CHARS = 2000;
+
+/**
+ * 段落を、合計が max 文字までの塊にまとめる（§3.5）。要求ごとにシステムプロンプトを送り直すので、
+ * 段落ごとに送るより要求数もトークンも減る。max を超える段落は 1 つで 1 塊にする
+ */
+export function chunkParagraphs(text: string, max = CHUNK_CHARS): string[] {
+  const chunks: string[] = [];
+  let cur = '';
+  for (const p of splitParagraphs(text)) {
+    if (cur !== '' && cur.length + 2 + p.length > max) {
+      chunks.push(cur);
+      cur = '';
+    }
+    cur = cur === '' ? p : `${cur}\n\n${p}`;
+  }
+  if (cur !== '') chunks.push(cur);
+  return chunks;
+}
+
 function systemPrompt(opts: { sourceLang: string | 'auto'; dictHints: DictHint[]; startIndex: number }): string {
   const lines = [
     'あなたは翻訳者です。入力を自然な日本語に訳し、1 文ごとに次の JSON を 1 行で出力してください。',
@@ -56,16 +77,43 @@ function retryAfter(headers?: Headers): number | undefined {
   return Number.isFinite(n) && n >= 0 ? Math.ceil(n) : undefined;
 }
 
+/**
+ * 429 がどの枠に当たったか（§3.6）。x-ratelimit-*-requests は 1 日の要求数、x-ratelimit-*-tokens は 1 分のトークン数。
+ * どちらも残っていれば（1 分の要求数か 1 日のトークン数）、待ち時間の長さで分ける
+ */
+function rateScope(headers: Headers | undefined, sec: number | undefined): 'minute' | 'day' | undefined {
+  if (headers?.get('x-ratelimit-remaining-requests') === '0') return 'day';
+  if (headers?.get('x-ratelimit-remaining-tokens') === '0') return 'minute';
+  if (sec === undefined) return undefined;
+  return sec <= 60 ? 'minute' : 'day';
+}
+
+function duration(sec: number): string {
+  if (sec < 60) return `${sec} 秒`;
+  const min = Math.ceil(sec / 60);
+  if (min < 60) return `${min} 分`;
+  return min % 60 === 0 ? `${min / 60} 時間` : `${Math.floor(min / 60)} 時間 ${min % 60} 分`;
+}
+
 /** HTTP の状態から画面に出すエラーを作る（§3.6） */
 export function toGroqError(status: number | 'network', headers?: Headers): GroqError {
   if (status === 'network') return { kind: 'network', message: 'Groq に接続できません' };
   if (status === 401) return { kind: 'auth', message: 'key が使えません' };
   if (status === 429) {
     const sec = retryAfter(headers);
-    const base = 'Groq の無料枠の上限に達しました。しばらく待ってから再実行してください';
-    return sec === undefined
-      ? { kind: 'rate', message: base }
-      : { kind: 'rate', message: `${base}（約 ${sec} 秒後に再実行できます）`, retryAfterSec: sec };
+    const scope = rateScope(headers, sec);
+    const base =
+      scope === 'minute'
+        ? 'Groq の 1 分あたりの上限に達しました。少し待ってから再実行してください'
+        : scope === 'day'
+          ? 'Groq の無料枠の 1 日の上限に達しました。時間をおいて再実行してください'
+          : 'Groq の無料枠の上限に達しました。しばらく待ってから再実行してください';
+    return {
+      kind: 'rate',
+      message: sec === undefined ? base : `${base}（約 ${duration(sec)}後に再実行できます）`,
+      ...(sec === undefined ? {} : { retryAfterSec: sec }),
+      ...(scope === undefined ? {} : { scope }),
+    };
   }
   return { kind: 'other', message: `Groq でエラーが発生しました（HTTP ${status}）` };
 }
@@ -94,6 +142,25 @@ async function request(fetchImpl: typeof fetch, url: string, init: RequestInit):
   return res;
 }
 
+/** 1 つの要求で 1 分の枠を待ち直す回数の上限 */
+const MAX_RATE_WAITS = 3;
+
+/** 中断できる待ち。中断されたら AbortError を投げる */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('aborted', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    if (signal?.aborted) abort();
+    else signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
 function modelExtra(model: string): Record<string, unknown> {
   return MODELS.find((m) => m.id === model)?.extra ?? {};
 }
@@ -106,20 +173,36 @@ export async function translateStream(opts: {
   dict: DictHint[];
   signal?: AbortSignal;
   onSentence: (s: Sentence) => void;
+  /** 1 分の枠に当たって待つ間は秒数、待ち終えたら null */
+  onWait?: (sec: number | null) => void;
   fetchImpl?: typeof fetch;
 }): Promise<{ usage?: unknown }> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const headers = { Authorization: `Bearer ${opts.key}`, 'Content-Type': 'application/json' };
-  const post = (messages: Message[], stream: boolean) =>
-    request(fetchImpl, `${API}/chat/completions`, {
-      method: 'POST',
-      headers,
-      signal: opts.signal,
-      body: JSON.stringify({ model: opts.model, messages, stream, ...modelExtra(opts.model) }),
-    });
+  // 1 分の枠に当たったら retry-after だけ待って同じ要求を送り直す（§3.6）。1 日の枠や待ち時間が分からないときは投げる
+  const post = async (messages: Message[], stream: boolean): Promise<Response> => {
+    for (let waits = 0; ; waits++) {
+      try {
+        return await request(fetchImpl, `${API}/chat/completions`, {
+          method: 'POST',
+          headers,
+          signal: opts.signal,
+          body: JSON.stringify({ model: opts.model, messages, stream, ...modelExtra(opts.model) }),
+        });
+      } catch (e) {
+        if (!isGroqError(e) || e.scope !== 'minute' || e.retryAfterSec === undefined || waits >= MAX_RATE_WAITS) throw e;
+        opts.onWait?.(e.retryAfterSec);
+        try {
+          await sleep(e.retryAfterSec * 1000, opts.signal);
+        } finally {
+          opts.onWait?.(null);
+        }
+      }
+    }
+  };
 
   const usages: unknown[] = [];
-  let next = 0; // 全段落通しの文番号
+  let next = 0; // 全塊通しの文番号
 
   // パースできた文に通し番号を振って渡す（モデルの i は使わない）
   const emit = (s: Sentence) => opts.onSentence({ ...s, i: next++ });
@@ -161,7 +244,7 @@ export async function translateStream(opts: {
     if (s) emit(s);
   };
 
-  for (const paragraph of splitParagraphs(opts.text)) {
+  for (const paragraph of chunkParagraphs(opts.text)) {
     const messages = buildMessages(paragraph, { sourceLang: opts.sourceLang, dictHints: opts.dict, startIndex: next });
     const res = await post(messages, true);
     if (!res.body) throw toGroqError('network');

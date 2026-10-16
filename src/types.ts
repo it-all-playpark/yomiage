@@ -60,4 +60,5 @@ export interface GroqError {
   kind: GroqErrorKind;
   message: string; // 画面に出す日本語（§3.6）
   retryAfterSec?: number;
+  scope?: 'minute' | 'day'; // 429 で当たった枠（§3.6）
 }

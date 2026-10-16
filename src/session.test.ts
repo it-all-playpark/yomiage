@@ -72,14 +72,14 @@ afterEach(() => {
 
 describe('translate', () => {
   it('届いた文をトークン化して積み、1 文目で再生を始める', async () => {
-    const fetchImpl = vi.fn(async () => sseResponse([S0])).mockResolvedValueOnce(sseResponse([S0])).mockResolvedValueOnce(sseResponse([S1]));
+    const fetchImpl = vi.fn().mockResolvedValueOnce(sseResponse([S0, S1]));
     const { env, sp } = makeEnv(fetchImpl as unknown as typeof fetch);
     await translate(REQ, env);
 
     expect(sentences.value.map((s) => s.i)).toEqual([0, 1]);
     const t = sentences.value[0].tokens.find((x) => x.text === '習近平');
     expect(t).toMatchObject({ fix: 'ai', reading: 'しゅうきんぺい' });
-    // 2 文目は段落が別でも通し番号。id も文で分かれる
+    // モデルが 2 文目も 0 番と返しても通し番号。id も文で分かれる
     expect(sentences.value[1].tokens[0].id).not.toBe(sentences.value[0].tokens[0].id);
     expect(sp.stop).toHaveBeenCalledTimes(1);
     expect(sp.setSentence).toHaveBeenNthCalledWith(1, 0, expect.objectContaining({ text: 'しゅうきんぺいは会談した。' }));
@@ -146,7 +146,7 @@ describe('translate の辞書ヒント', () => {
 
 describe('applyFix / rebuildAll', () => {
   async function twoSentences(opts?: { dict?: DictData; analyzer?: Analyzer | null }) {
-    const fetchImpl = vi.fn().mockResolvedValueOnce(sseResponse([S0])).mockResolvedValueOnce(sseResponse([S1]));
+    const fetchImpl = vi.fn().mockResolvedValueOnce(sseResponse([S0, S1]));
     const r = makeEnv(fetchImpl as unknown as typeof fetch, opts);
     await translate(REQ, r.env);
     r.sp.setSentence.mockClear();
