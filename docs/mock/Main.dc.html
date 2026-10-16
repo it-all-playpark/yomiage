@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>よみあげ翻訳 — メイン</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F4BD8}a:hover{color:#1F35A8}
+rt{font-size:11px;letter-spacing:0.02em}
+</style>
+</helmet>
+<div style="min-height: 1080px; background: #F3F5F8; color: #16202A; font-family: 'Zen Kaku Gothic New', 'Yu Gothic UI', sans-serif; font-size: 15px; line-height: 1.7">
+<header style="max-width: 1216px; margin: 0 auto; padding: 20px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="width: 40px; height: 40px; border-radius: 10px; background: #2F4BD8; display: flex; align-items: center; justify-content: center">
+<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>
+</div>
+<div style="font-size: 20px; font-weight: 700; letter-spacing: 0.04em">よみあげ翻訳</div>
+</div>
+<nav aria-label="メインメニュー" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<a href="Main.dc.html" aria-current="page" style="padding: 10px 14px; border-radius: 8px; background: #FFFFFF; color: #16202A; text-decoration: none; font-weight: 700">翻訳</a>
+<a href="Dictionary.dc.html" style="padding: 10px 14px; border-radius: 8px; color: #3E4A59; text-decoration: none">読み辞書</a>
+<a href="Setup.dc.html" style="padding: 10px 14px; border-radius: 8px; color: #3E4A59; text-decoration: none">設定</a>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: #E3F1EA; color: #1D5E3F; font-size: 13px; font-weight: 500">
+<span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #1F8A5B"></span>Groq 接続済み
+</div>
+</nav>
+</header>
+
+<main style="max-width: 1216px; margin: 0 auto; padding: 0 32px 48px; display: flex; flex-wrap: wrap; gap: 24px; box-sizing: border-box">
+
+<section aria-labelledby="src-h" style="flex: 1 1 400px; min-width: 0; background: #FFFFFF; border-radius: 16px; border: 1px solid #DCE1E8; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<h2 id="src-h" style="margin: 0; font-size: 17px; font-weight: 700">原文</h2>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 14px">
+<label for="src-lang" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">原文の言語</label>
+<select id="src-lang" style="height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid #C9D0DA; background: #FFFFFF; font: inherit; color: #16202A">
+<option>自動検出（英語）</option>
+<option>英語</option>
+<option>中国語</option>
+<option>韓国語</option>
+</select>
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#556170" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+<span style="padding: 8px 12px; border-radius: 8px; background: #EEF1F5; font-weight: 500">日本語</span>
+</div>
+</div>
+<label for="src-text" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">翻訳する文章</label>
+<textarea id="src-text" rows="11" style="width: 100%; box-sizing: border-box; resize: vertical; padding: 16px; border-radius: 12px; border: 1px solid #C9D0DA; font: inherit; line-height: 1.8; color: #16202A; background: #FBFCFD">Chinese President Xi Jinping held talks with Japan's prime minister. Separately, a government panel resumed its debate on imperial succession. The service is also available to able-bodied people.</textarea>
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: #556170">
+<span>Ctrl + Enter でも翻訳できます</span>
+<a href="Setup.dc.html">モデル：llama-3.3-70b（速さ重視）</a>
+</div>
+<button type="button" onClick="{{translate}}" style="min-height: 48px; padding: 0 28px; border: 0; border-radius: 10px; background: #2F4BD8; color: #FFFFFF; font: inherit; font-weight: 700; cursor: pointer">{{translateLabel}}</button>
+</div>
+</section>
+
+<section aria-labelledby="out-h" style="flex: 1 1 560px; min-width: 0; background: #FFFFFF; border-radius: 16px; border: 1px solid #DCE1E8; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<h2 id="out-h" style="margin: 0; font-size: 17px; font-weight: 700">訳文</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<label style="display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; color: #3E4A59; cursor: pointer"><input type="checkbox" checked="{{showAll}}" onChange="{{toggleAll}}" style="width: 18px; height: 18px; accent-color: #2F4BD8">ふりがなをすべて表示</label>
+<div role="group" aria-label="表示の切り替え" style="display: flex; padding: 4px; border-radius: 10px; background: #E6EAF0; gap: 4px">
+<button type="button" onClick="{{showDisplay}}" aria-pressed="{{isDisplay}}" style="{{displayTabStyle}}">表示用</button>
+<button type="button" onClick="{{showKana}}" aria-pressed="{{isKana}}" style="{{kanaTabStyle}}">読み上げ用</button>
+</div>
+</div>
+</div>
+
+<p style="margin: 0; font-size: 13px; color: #556170">{{viewHint}}</p>
+<p style="margin: 0; padding: 8px 4px; font-size: 18px; line-height: 2.5"><sc-for list="{{tokens}}" as="t" hint-placeholder-count="24"><sc-if value="{{t.visible}}" hint-placeholder-val="{{ true }}"><sc-if value="{{t.isWord}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{t.pick}}" aria-label="{{t.label}}" style="{{t.style}}"><sc-if value="{{t.showRuby}}" hint-placeholder-val="{{ false }}"><ruby>{{t.shown}}<rt style="{{t.rtStyle}}">{{t.reading}}</rt></ruby></sc-if><sc-if value="{{t.noRuby}}" hint-placeholder-val="{{ true }}">{{t.shown}}</sc-if></button></sc-if><sc-if value="{{t.isKana}}" hint-placeholder-val="{{ false }}"><span style="{{t.style}}">{{t.text}}</span></sc-if></sc-if></sc-for><sc-if value="{{receiving}}" hint-placeholder-val="{{ false }}"><span style="margin-left: 6px; font-size: 13px; color: #556170">次の文を受信中…</span></sc-if></p>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: #3E4A59">
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 3px; background: #B4410C"></span>AI が付けた読み</span>
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 3px; background: #2F4BD8"></span>自分で直した読み</span>
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 16px; border-bottom: 1px dashed #7D8896"></span>クリックで読みを直せる語</span>
+</div>
+
+<sc-if value="{{hasSel}}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="読みを直す" style="border: 1px solid #2F4BD8; border-radius: 12px; padding: 16px; background: #F7F9FF; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px">
+<span style="font-size: 16px; font-weight: 700">「{{selWord}}」の読みを直す</span>
+<span style="font-size: 13px; color: #3E4A59">今の読み：{{selCurrent}}（{{selSource}}）</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px">
+<div style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<label for="fix-reading" style="font-size: 13px; font-weight: 500">読み（ひらがな）</label>
+<input id="fix-reading" type="text" value="{{draft}}" onChange="{{onDraft}}" style="height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid #C9D0DA; background: #FFFFFF; font: inherit; font-size: 16px; color: #16202A">
+</div>
+<button type="button" style="min-height: 44px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border: 1px solid #C9D0DA; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 14px; color: #2F4BD8; cursor: pointer">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"></path></svg>試聴</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px">
+<button type="button" onClick="{{cancelSel}}" style="min-height: 44px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 14px; color: #3E4A59; cursor: pointer">キャンセル</button>
+<button type="button" onClick="{{saveOnce}}" style="min-height: 44px; padding: 0 16px; border: 1px solid #2F4BD8; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; color: #2F4BD8; cursor: pointer">この文だけ直す</button>
+<button type="button" onClick="{{saveDict}}" style="min-height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: #2F4BD8; font: inherit; font-size: 14px; font-weight: 700; color: #FFFFFF; cursor: pointer">辞書に登録して直す</button>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 12px; background: #F3F5F8">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+<button type="button" onClick="{{togglePlay}}" aria-label="{{playLabel}}" style="width: 52px; height: 52px; flex: 0 0 52px; border: 0; border-radius: 50%; background: #2F4BD8; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<sc-if value="{{notPlaying}}" hint-placeholder-val="{{ true }}">
+<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="2" stroke-linejoin="round"><path d="M7 4.5v15l12-7.5z"></path></svg>
+</sc-if>
+<sc-if value="{{playing}}" hint-placeholder-val="{{ false }}">
+<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"><path d="M8 5v14"></path><path d="M16 5v14"></path></svg>
+</sc-if>
+</button>
+<div style="flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<div role="status" style="font-size: 13px; color: #3E4A59">{{statusText}}</div>
+<div style="height: 6px; border-radius: 3px; background: #D5DBE3; overflow: hidden"><div style="{{progressStyle}}"></div></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<label for="voice" style="font-size: 13px; color: #3E4A59">声</label>
+<select id="voice" style="height: 40px; max-width: 260px; padding: 0 10px; border-radius: 8px; border: 1px solid #C9D0DA; background: #FFFFFF; font: inherit; font-size: 14px; color: #16202A">
+<option>Microsoft Nanami Online (Natural)</option>
+<option>Microsoft Keita Online (Natural)</option>
+<option>Microsoft Haruka（PC 内蔵・待ちなし）</option>
+</select>
+<label for="rate" style="font-size: 13px; color: #3E4A59">速さ</label>
+<select id="rate" style="height: 40px; padding: 0 10px; border-radius: 8px; border: 1px solid #C9D0DA; background: #FFFFFF; font: inherit; font-size: 14px; color: #16202A">
+<option>0.8x</option>
+<option selected>1.0x</option>
+<option>1.2x</option>
+<option>1.5x</option>
+</select>
+</div>
+</div>
+<span style="font-size: 12px; color: #556170">翻訳は 1 文ずつ届きます。1 文目が届いたら読み上げを始めます。</span>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 1px solid #C9D0DA; border-radius: 10px; background: #FFFFFF; font: inherit; font-size: 14px; color: #16202A; cursor: pointer">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h8"></path></svg>訳文をコピー</button>
+<button type="button" onClick="{{replay}}" style="min-height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 1px solid #C9D0DA; border-radius: 10px; background: #FFFFFF; font: inherit; font-size: 14px; color: #16202A; cursor: pointer">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>最初から読む</button>
+</div>
+</section>
+
+<section aria-labelledby="rd-h" style="flex: 1 1 100%; min-width: 0; background: #FFFFFF; border-radius: 16px; border: 1px solid #DCE1E8; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px">
+<h2 id="rd-h" style="margin: 0; font-size: 17px; font-weight: 700">直した読み</h2>
+<span style="font-size: 13px; color: #556170">AI が付けた読みと、自分で直した読みの一覧です。辞書に入れると、次から同じ語は必ずこの読みになります。</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px">
+<sc-for list="{{fixedList}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 12px; border: 1px solid #DCE1E8; background: #FBFCFD">
+<div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap">
+<span style="font-size: 18px; font-weight: 700">{{r.word}}</span>
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#556170" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+<span style="{{r.readingStyle}}">{{r.reading}}</span>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap">
+<span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #EEF1F5; color: #3E4A59">{{r.source}}</span>
+<div style="display: flex; gap: 8px">
+<button type="button" onClick="{{r.edit}}" style="min-height: 44px; padding: 0 14px; border: 1px solid #C9D0DA; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 14px; color: #16202A; cursor: pointer">直す</button>
+<sc-if value="{{r.canDict}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{r.toDict}}" style="min-height: 44px; padding: 0 14px; border: 0; border-radius: 8px; background: #2F4BD8; font: inherit; font-size: 14px; color: #FFFFFF; cursor: pointer">辞書に追加</button>
+</sc-if>
+<sc-if value="{{r.inDict}}" hint-placeholder-val="{{ false }}">
+<span style="min-height: 44px; padding: 0 14px; display: flex; align-items: center; border: 1px solid #1F8A5B; border-radius: 8px; background: #E3F1EA; font-size: 14px; color: #1D5E3F">辞書に登録済み</span>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</section>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1080}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const raw = [
+      ['中国', 'ちゅうごく', 0, ''], ['の', null, 0, ''], ['習近平', 'しゅうきんぺい', 0, 'ai'], ['国家主席', 'こっかしゅせき', 0, ''], ['は', null, 0, ''],
+      ['日本', 'にほん', 0, ''], ['の', null, 0, ''], ['首相', 'しゅしょう', 0, ''], ['と', null, 0, ''], ['会談', 'かいだん', 0, ''], ['した。', null, 0, ''],
+      ['一方', 'いっぽう', 1, ''], ['、', null, 1, ''], ['政府', 'せいふ', 1, ''], ['の', null, 1, ''], ['有識者会議', 'ゆうしきしゃかいぎ', 1, ''], ['は', null, 1, ''],
+      ['皇位継承', 'こういけいしょう', 1, 'ai'], ['をめぐる', null, 1, ''], ['議論', 'ぎろん', 1, ''], ['を', null, 1, ''], ['再開', 'さいかい', 1, ''], ['した。', null, 1, ''],
+      ['このサービスは', null, 2, ''], ['健常', 'けんじょう', 2, 'dict'], ['な', null, 2, ''], ['人', 'ひと', 2, ''], ['も', null, 2, ''], ['利用', 'りよう', 2, ''], ['できる。', null, 2, '']
+    ];
+    this.state = {
+      tokens: raw.map((r, i) => ({ id: i, text: r[0], reading: r[1], s: r[2], fix: r[3] })),
+      view: 'display', showAll: false, sel: null, draft: '',
+      playing: false, cur: -1, received: 3, streaming: false
+    };
+    this.timers = [];
+    this.tick = null;
+  }
+  componentWillUnmount() {
+    this.timers.forEach((t) => clearTimeout(t));
+    if (this.tick) clearInterval(this.tick);
+  }
+  stop(reset) {
+    if (this.tick) clearInterval(this.tick);
+    this.tick = null;
+    this.setState(reset ? { playing: false, cur: -1 } : { playing: false });
+  }
+  start(fromTop) {
+    if (this.tick) clearInterval(this.tick);
+    const len = this.state.tokens.length;
+    const cur = this.state.cur;
+    this.setState({ playing: true, cur: fromTop || cur < 0 || cur >= len - 1 ? 0 : cur });
+    this.tick = setInterval(() => {
+      const st = this.state;
+      const next = st.cur + 1;
+      if (next >= st.tokens.length) { this.stop(true); return; }
+      if (st.tokens[next].s >= st.received) return;
+      this.setState({ cur: next });
+    }, 320);
+  }
+  setFix(id, fix, reading, allSame) {
+    const target = this.state.tokens[id];
+    const tokens = this.state.tokens.map((t) =>
+      t.id === id || (allSame && t.text === target.text) ? { ...t, fix: fix, reading: reading } : t
+    );
+    this.setState({ tokens: tokens, sel: null });
+  }
+  renderVals() {
+    const s = this.state;
+    const tabOn = 'min-height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #FFFFFF; color: #16202A; font: inherit; font-size: 14px; font-weight: 700; box-shadow: 0 1px 2px rgba(22,32,42,0.15); cursor: pointer';
+    const tabOff = 'min-height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: transparent; color: #3E4A59; font: inherit; font-size: 14px; cursor: pointer';
+    const fixColor = { ai: '#B4410C', once: '#2F4BD8', dict: '#2F4BD8' };
+    const sourceLabel = { '': '自動解析の読み', ai: 'AI が付けた読み', once: 'この文だけ直した読み', dict: '辞書の読み' };
+    const kanaView = s.view === 'kana';
+    const curTok = s.cur >= 0 ? s.tokens[s.cur] : null;
+    const sel = s.sel !== null ? s.tokens[s.sel] : null;
+
+    const tokens = s.tokens.map((t) => {
+      const isWord = t.reading !== null;
+      const fixed = t.fix !== '';
+      const isCur = t.id === s.cur;
+      const isSel = t.id === s.sel;
+      const showRuby = isWord && !kanaView && (fixed || s.showAll);
+      let bg = 'transparent';
+      if (isCur) bg = '#FFE58A';
+      else if (isSel) bg = '#DCE4FB';
+      else if (kanaView && fixed) bg = '#FCE9DD';
+      const color = fixed ? fixColor[t.fix] : '#16202A';
+      const style = isWord
+        ? 'margin: 0; padding: 0 1px; border: 0; border-bottom: ' + (fixed ? '2px solid ' + color : '1px dashed #7D8896') + '; border-radius: 3px; background: ' + bg + '; color: ' + color + '; font: inherit; font-weight: ' + (fixed ? 700 : 400) + '; line-height: inherit; cursor: pointer'
+        : 'padding: 0 1px; border-radius: 3px; background: ' + bg;
+      return {
+        text: t.text,
+        reading: t.reading,
+        isWord: isWord,
+        isKana: !isWord,
+        visible: t.s < s.received,
+        showRuby: showRuby,
+        noRuby: !showRuby,
+        shown: kanaView && fixed ? t.reading : t.text,
+        style: style,
+        rtStyle: fixed ? 'color: ' + color + '; font-weight: 700' : 'color: #556170; font-weight: 400',
+        label: t.text + '（' + t.reading + '）の読みを直す',
+        pick: () => this.setState({ sel: t.id, draft: t.reading })
+      };
+    });
+
+    const seen = {};
+    const fixedList = s.tokens.filter((t) => {
+      if (t.fix === '' || seen[t.text]) return false;
+      seen[t.text] = true;
+      return true;
+    }).map((t) => ({
+      word: t.text,
+      reading: t.reading,
+      source: sourceLabel[t.fix],
+      readingStyle: 'font-size: 18px; font-weight: 700; color: ' + fixColor[t.fix],
+      canDict: t.fix !== 'dict',
+      inDict: t.fix === 'dict',
+      edit: () => this.setState({ sel: t.id, draft: t.reading }),
+      toDict: () => this.setFix(t.id, 'dict', t.reading, true)
+    }));
+
+    let statusText = '停止中';
+    if (s.playing && s.streaming) statusText = '受信しながら読み上げ中（' + s.received + ' / 3 文が届いた）';
+    else if (s.playing && curTok) statusText = (curTok.s + 1) + ' 文目を読み上げ中';
+    else if (s.streaming) statusText = '翻訳を受信中…';
+
+    return {
+      tokens: tokens,
+      receiving: s.streaming && s.received < 3,
+      isDisplay: !kanaView,
+      isKana: kanaView,
+      viewHint: kanaView
+        ? '読み上げにはこの文を使います。かなにするのは直した語だけで、ほかは漢字のまま渡すので、イントネーションが崩れにくくなります。'
+        : '読みが違う語は、クリックするとその場で直せます。',
+      displayTabStyle: kanaView ? tabOff : tabOn,
+      kanaTabStyle: kanaView ? tabOn : tabOff,
+      showDisplay: () => this.setState({ view: 'display' }),
+      showKana: () => this.setState({ view: 'kana' }),
+      showAll: s.showAll,
+      toggleAll: () => this.setState({ showAll: !s.showAll }),
+
+      hasSel: !!sel,
+      selWord: sel ? sel.text : '',
+      selCurrent: sel ? sel.reading : '',
+      selSource: sel ? sourceLabel[sel.fix] : '',
+      draft: s.draft,
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      cancelSel: () => this.setState({ sel: null }),
+      saveOnce: () => this.setFix(s.sel, 'once', s.draft, false),
+      saveDict: () => this.setFix(s.sel, 'dict', s.draft, true),
+
+      playing: s.playing,
+      notPlaying: !s.playing,
+      playLabel: s.playing ? '一時停止' : '読み上げる',
+      statusText: statusText,
+      progressStyle: 'height: 100%; border-radius: 3px; background: #2F4BD8; width: ' + (s.cur >= 0 ? Math.round(((s.cur + 1) / s.tokens.length) * 100) : 0) + '%',
+      togglePlay: () => (s.playing ? this.stop(false) : this.start(false)),
+      replay: () => this.start(true),
+
+      translateLabel: s.streaming ? '翻訳中…' : '翻訳する',
+      translate: () => {
+        this.timers.forEach((t) => clearTimeout(t));
+        if (this.tick) clearInterval(this.tick);
+        this.tick = null;
+        this.setState({ received: 0, streaming: true, playing: false, cur: -1, sel: null });
+        this.timers = [
+          setTimeout(() => { this.setState({ received: 1 }); this.start(true); }, 500),
+          setTimeout(() => this.setState({ received: 2 }), 1300),
+          setTimeout(() => this.setState({ received: 3, streaming: false }), 2100)
+        ];
+      },
+
+      fixedList: fixedList
+    };
+  }
+}
+</script>
+</body>
+</html>
