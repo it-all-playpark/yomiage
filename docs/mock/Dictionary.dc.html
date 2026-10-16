@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>よみあげ翻訳 — 読み辞書</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F4BD8}a:hover{color:#1F35A8}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F3F5F8; color: #16202A; font-family: 'Zen Kaku Gothic New', 'Yu Gothic UI', sans-serif; font-size: 15px; line-height: 1.7">
+<header style="max-width: 1216px; margin: 0 auto; padding: 20px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="width: 40px; height: 40px; border-radius: 10px; background: #2F4BD8; display: flex; align-items: center; justify-content: center">
+<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>
+</div>
+<div style="font-size: 20px; font-weight: 700; letter-spacing: 0.04em">よみあげ翻訳</div>
+</div>
+<nav aria-label="メインメニュー" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<a href="Main.dc.html" style="padding: 10px 14px; border-radius: 8px; color: #3E4A59; text-decoration: none">翻訳</a>
+<a href="Dictionary.dc.html" aria-current="page" style="padding: 10px 14px; border-radius: 8px; background: #FFFFFF; color: #16202A; text-decoration: none; font-weight: 700">読み辞書</a>
+<a href="Setup.dc.html" style="padding: 10px 14px; border-radius: 8px; color: #3E4A59; text-decoration: none">設定</a>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: #E3F1EA; color: #1D5E3F; font-size: 13px; font-weight: 500">
+<span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #1F8A5B"></span>Groq 接続済み
+</div>
+</nav>
+</header>
+
+<main style="max-width: 1216px; margin: 0 auto; padding: 8px 32px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 700; line-height: 1.4">読み辞書</h1>
+<p style="margin: 0; color: #3E4A59">ここに登録した読みは、AI が付ける読みより優先されます。</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 1px solid #C9D0DA; border-radius: 10px; background: #FFFFFF; font: inherit; font-size: 14px; color: #16202A; cursor: pointer">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"></path><path d="m7 10 5 5 5-5"></path><path d="M4 21h16"></path></svg>書き出し</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 1px solid #C9D0DA; border-radius: 10px; background: #FFFFFF; font: inherit; font-size: 14px; color: #16202A; cursor: pointer">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="m7 8 5-5 5 5"></path><path d="M4 21h16"></path></svg>読み込み</button>
+</div>
+</div>
+
+<section aria-labelledby="add-h" style="background: #FFFFFF; border-radius: 16px; border: 1px solid #DCE1E8; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+<h2 id="add-h" style="margin: 0; font-size: 17px; font-weight: 700">読みを追加</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px">
+<div style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="w" style="font-size: 14px; font-weight: 500">単語</label>
+<input id="w" type="text" placeholder="例：御用達" style="height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid #C9D0DA; background: #FBFCFD; font: inherit; color: #16202A">
+</div>
+<div style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<label for="r" style="font-size: 14px; font-weight: 500">読み（ひらがな）</label>
+<input id="r" type="text" placeholder="例：ごようたし" style="height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid #C9D0DA; background: #FBFCFD; font: inherit; color: #16202A">
+</div>
+<button type="button" style="min-height: 48px; padding: 0 18px; display: flex; align-items: center; gap: 8px; border: 1px solid #2F4BD8; border-radius: 10px; background: #FFFFFF; color: #2F4BD8; font: inherit; font-weight: 700; cursor: pointer">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"></path></svg>試聴</button>
+<button type="button" style="min-height: 48px; padding: 0 28px; border: 0; border-radius: 10px; background: #2F4BD8; color: #FFFFFF; font: inherit; font-weight: 700; cursor: pointer">追加</button>
+</div>
+</section>
+
+<section aria-labelledby="list-h" style="background: #FFFFFF; border-radius: 16px; border: 1px solid #DCE1E8; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<h2 id="list-h" style="margin: 0; font-size: 17px; font-weight: 700">登録済み <span style="font-weight: 400; color: #556170; font-size: 14px">{{count}} 件</span></h2>
+<div style="display: flex; align-items: center; gap: 8px">
+<label for="q" style="font-size: 14px; color: #3E4A59">絞り込み</label>
+<input id="q" type="search" placeholder="単語か読みで検索" style="height: 40px; width: 220px; max-width: 100%; padding: 0 12px; border-radius: 8px; border: 1px solid #C9D0DA; background: #FBFCFD; font: inherit; font-size: 14px; color: #16202A">
+</div>
+</div>
+<div style="overflow-x: auto; border: 1px solid #E6EAF0; border-radius: 12px">
+<table style="width: 100%; min-width: 640px; border-collapse: collapse; font-size: 15px">
+<thead>
+<tr style="background: #F3F5F8; text-align: left">
+<th scope="col" style="padding: 12px 16px; font-size: 13px; color: #3E4A59; font-weight: 500">単語</th>
+<th scope="col" style="padding: 12px 16px; font-size: 13px; color: #3E4A59; font-weight: 500">読み</th>
+<th scope="col" style="padding: 12px 16px; font-size: 13px; color: #3E4A59; font-weight: 500">登録元</th>
+<th scope="col" style="padding: 12px 16px; font-size: 13px; color: #3E4A59; font-weight: 500; text-align: right">操作</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="5">
+<tr style="border-top: 1px solid #E6EAF0">
+<td style="padding: 10px 16px; font-weight: 700; font-size: 16px">{{row.word}}</td>
+<td style="padding: 10px 16px; color: #B4410C; font-weight: 700; font-size: 16px">{{row.reading}}</td>
+<td style="padding: 10px 16px"><span style="font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #EEF1F5; color: #3E4A59">{{row.source}}</span></td>
+<td style="padding: 10px 16px">
+<div style="display: flex; justify-content: flex-end; gap: 6px">
+<button type="button" aria-label="{{row.playLabel}}" style="width: 44px; height: 44px; border: 1px solid #C9D0DA; border-radius: 8px; background: #FFFFFF; color: #2F4BD8; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"></path></svg>
+</button>
+<button type="button" aria-label="{{row.editLabel}}" style="width: 44px; height: 44px; border: 1px solid #C9D0DA; border-radius: 8px; background: #FFFFFF; color: #3E4A59; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"></path></svg>
+</button>
+<button type="button" onClick="{{row.remove}}" aria-label="{{row.removeLabel}}" style="width: 44px; height: 44px; border: 1px solid #C9D0DA; border-radius: 8px; background: #FFFFFF; color: #A1281B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path></svg>
+</button>
+</div>
+</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<p style="margin: 0; font-size: 13px; color: #556170">辞書はこのブラウザに保存されます。別のパソコンに移すときは「書き出し」したファイルを、移った先で「読み込み」してください。</p>
+</section>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      rows: [
+        { word: '習近平', reading: 'しゅうきんぺい', source: '翻訳画面から' },
+        { word: '皇位継承', reading: 'こういけいしょう', source: '翻訳画面から' },
+        { word: '健常', reading: 'けんじょう', source: '手入力' },
+        { word: '御用達', reading: 'ごようたし', source: '手入力' },
+        { word: '東海林', reading: 'しょうじ', source: '手入力' }
+      ]
+    };
+  }
+  renderVals() {
+    const rows = this.state.rows;
+    return {
+      count: rows.length,
+      rows: rows.map((r) => ({
+        ...r,
+        playLabel: r.word + ' を試聴',
+        editLabel: r.word + ' を編集',
+        removeLabel: r.word + ' を削除',
+        remove: () => this.setState({ rows: rows.filter((x) => x.word !== r.word) })
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>
