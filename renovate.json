@@ -7,7 +7,7 @@
     "schedule: 日曜・月曜（JST）の 48h 窓。Mend hosted の無料枠は実行間隔が保証されず、狭い窓だとジョブが 1 回落ちるとその週が丸ごと飛ぶ（shift-bud で 3 週間 PR が 0 本になった）。",
     "minimumReleaseAge: リリース直後の版（取り下げ・壊れた publish）を掴まない。週次スケジュールと合わせて連続リリースを 1 本の PR に畳む。",
     "rebaseWhen: 既定の auto は main が動くたびに open 中の全 Renovate PR を rebase する。コンフリクト時のみにする。",
-    "base は main（dev ブランチ運用はしない）。Pages workflow は main への push でしか走らないので、Renovate PR 自体にはテストが付かず、マージした時点で test → build → 公開になる。automerge は付けない。"
+    "base は main（dev ブランチ運用はしない）。Renovate PR では CI workflow が test と build を回す。マージすると Pages workflow が test → build → 公開まで進むので、automerge は付けず人が確かめてからマージする。"
   ],
   "schedule": ["* * * * 0,1"],
   "prConcurrentLimit": 3,
