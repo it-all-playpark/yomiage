@@ -257,7 +257,8 @@ export class Speaker {
       clearTimeout(this.watchTimer);
       this.watchTimer = setTimeout(watch, timeout);
     };
-    this.startWatch();
+    // 一時停止中に前の文の onend が届いて積んだときは、始まらなくて当たり前なので再開してから測る
+    if (!this.state.paused) this.startWatch();
   }
 
   private applyVoice(u: SpeechSynthesisUtterance): void {

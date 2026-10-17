@@ -20,6 +20,8 @@ class FakeSynth {
   // 読み始めずに止まる発話の文字列。1 回止まるごとに 1 つ消える（Chrome で speak した発話が始まらないことがある）
   stuck: string[] = [];
   paused = false;
+  // 読み始めた発話。一時停止中に積まれた発話は再開するまで始まらない
+  private started = new Set<FakeUtterance>();
   voices = [
     { voiceURI: 'haruka', lang: 'ja-JP', name: 'Haruka' },
     { voiceURI: 'nanami', lang: 'ja-JP', name: 'Nanami' },
@@ -35,6 +37,8 @@ class FakeSynth {
     if (this.queue.length === 1) this.start(u);
   }
   private start(u: FakeUtterance) {
+    if (this.paused) return;
+    this.started.add(u);
     const i = this.stuck.indexOf(u.text);
     if (i >= 0) this.stuck.splice(i, 1);
     else u.onstart?.();
@@ -50,6 +54,8 @@ class FakeSynth {
   }
   resume() {
     this.paused = false;
+    const u = this.queue[0];
+    if (u && !this.started.has(u)) this.start(u);
   }
   get current() {
     return this.queue[0];
@@ -198,6 +204,26 @@ describe('Speaker', () => {
     vi.advanceTimersByTime(START_TIMEOUT_MS);
     expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'あ']);
     expect(state).toMatchObject({ playing: true, paused: false, sentence: 0 });
+  });
+
+  it('一時停止中に今の文の end が届いて次の文を積んでも、再開するまで積み直さない', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.setSentence(2, st('う'));
+    speaker.play();
+    speaker.pause();
+    synth.end();
+    expect(synth.texts).toEqual(['い']);
+    vi.advanceTimersByTime(START_TIMEOUT_MS * 100);
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'い']);
+    expect(synth.paused).toBe(true);
+    expect(state).toMatchObject({ playing: true, paused: true, sentence: 0 });
+
+    speaker.play();
+    expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+    synth.end();
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'い', 'う']);
+    expect(state.sentence).toBe(2);
   });
 
   it('見張りの時間の途中で再開しても、再開したときから START_TIMEOUT_MS は積み直さない', () => {
