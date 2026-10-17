@@ -1,11 +1,12 @@
 // localStorage への保存（spec §7）。使えない環境ではメモリに持ってその場限りで動く。
-import type { DictData, DictEntry, Settings } from '../types';
+import type { DictData, DictEntry, SavedSentence, Settings } from '../types';
 import { DEFAULT_MODEL, MODELS } from './groq';
 import { hasKanji } from './analyzer';
 
 const KEY_GROQ = 'yomiage.groqKey';
 const KEY_SETTINGS = 'yomiage.settings';
 const KEY_DICT = 'yomiage.dict';
+const KEY_CHUNKS = 'yomiage.chunks';
 
 const memory = new Map<string, string>();
 
@@ -189,4 +190,65 @@ export function importDict(
   const incoming = new Map(d.entries.map((e) => [e.word, e]));
   const kept = current.entries.filter((e) => !incoming.has(e.word));
   return { ok: true, dict: { version: 1, entries: [...kept, ...incoming.values()] }, count: incoming.size };
+}
+
+// ---- 訳し終えた塊 ----
+
+/** 保存しておく塊の数の上限。超えたら保存した順に古いものから捨てる */
+export const CHUNK_LIMIT = 100;
+
+/** 文字列のハッシュ（cyrb53）。原文をキーに入れないために使う */
+function hash(s: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+/** 塊を保存するキー。モデル・原文の言語・塊の原文のハッシュで作る（辞書は含めない） */
+export function chunkKey(model: string, sourceLang: string, text: string): string {
+  return `${model}|${sourceLang}|${hash(text)}`;
+}
+
+type SavedChunk = { key: string; sentences: SavedSentence[] };
+
+function isSavedSentence(v: unknown): v is SavedSentence {
+  if (typeof v !== 'object' || v === null) return false;
+  const s = v as Record<string, unknown>;
+  return (
+    Number.isInteger(s.p) &&
+    (s.p as number) >= 0 &&
+    typeof s.ja === 'string' &&
+    Array.isArray(s.readings) &&
+    s.readings.every((r) => typeof r?.w === 'string' && typeof r?.r === 'string')
+  );
+}
+
+function loadChunks(): SavedChunk[] {
+  const v = parseJson(read(KEY_CHUNKS));
+  const o = typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : null;
+  if (o?.version !== 1 || !Array.isArray(o.entries)) return [];
+  return o.entries.filter(
+    (e): e is SavedChunk => typeof e?.key === 'string' && Array.isArray(e.sentences) && e.sentences.every(isSavedSentence),
+  );
+}
+
+export function loadChunk(key: string): SavedSentence[] | null {
+  return loadChunks().find((e) => e.key === key)?.sentences ?? null;
+}
+
+/** 書き込めなくても（容量超過など）投げない。保存できなかった塊は次に訳すとき要求し直すだけ */
+export function saveChunk(key: string, sentences: SavedSentence[]): void {
+  const entries = [...loadChunks().filter((e) => e.key !== key), { key, sentences }].slice(-CHUNK_LIMIT);
+  try {
+    write(KEY_CHUNKS, JSON.stringify({ version: 1, entries }));
+  } catch {
+    // 保存は諦めて翻訳を続ける
+  }
 }

@@ -131,7 +131,7 @@ export async function translate(req: TranslateRequest, env: SessionEnv): Promise
   }
 }
 
-/** 直前の翻訳をやり直す（通信エラーの再試行） */
+/** 直前の翻訳をやり直す（通信エラーの再試行）。訳し終えた塊は保存した結果を使い、Groq に送り直さない（§3.5） */
 export function retry(env: SessionEnv): Promise<void> {
   return lastRequest ? translate(lastRequest, env) : Promise.resolve();
 }

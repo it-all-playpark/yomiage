@@ -65,15 +65,21 @@ function fakeFetch(responses: (Response | Error | DOMException)[]) {
   return { impl: impl as unknown as typeof fetch, calls };
 }
 
-async function run(fetchImpl: typeof fetch, text = 'Hello.', model = DEFAULT_MODEL, signal?: AbortSignal) {
+async function run(
+  fetchImpl: typeof fetch,
+  text = 'Hello.',
+  model = DEFAULT_MODEL,
+  signal?: AbortSignal,
+  more: { sourceLang?: string; dict?: { word: string; reading: string }[] } = {},
+) {
   const got: Sentence[] = [];
   const paras: number[] = [];
   const result = await translateStream({
     key: 'gsk_test',
     model,
     text,
-    sourceLang: 'auto',
-    dict: [],
+    sourceLang: more.sourceLang ?? 'auto',
+    dict: more.dict ?? [],
     signal,
     onSentence: (s, p) => {
       got.push(s);
@@ -83,6 +89,11 @@ async function run(fetchImpl: typeof fetch, text = 'Hello.', model = DEFAULT_MOD
   });
   return { got, paras, result };
 }
+
+// 訳し終えた塊は localStorage に残るので、テストごとに消す
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('MODELS', () => {
   it('速さ重視の gpt-oss-20b が既定でおすすめ、どちらも reasoning_effort low', () => {
@@ -420,6 +431,105 @@ describe('translateStream', () => {
     const err = await run(impl, 'a', DEFAULT_MODEL, ac.signal).catch((e) => e);
     expect(isGroqError(err)).toBe(false);
     expect((err as DOMException).name).toBe('AbortError');
+  });
+});
+
+describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
+  const done = (s: string) => sse(s) + 'data: [DONE]\n\n';
+  const raw = (o: object) => JSON.stringify(o) + '\n';
+
+  it('同じ原文・言語・モデルの 2 回目は要求せず、同じ文と段落番号を同じ順で渡す', async () => {
+    const body = done(
+      raw({ i: 0, p: 0, ja: '習近平は会談した。', readings: [{ w: '習近平', r: 'しゅうきんぺい' }] }) +
+        raw({ i: 1, p: 1, ja: '二。', readings: [] }) +
+        raw({ i: 2, p: 1, ja: '三。', readings: [] }),
+    );
+    const text = 'Xi met the PM.\n\nTwo. Three.';
+    const first = await run(fakeFetch([sseResponse(body)]).impl, text);
+
+    const { impl, calls } = fakeFetch([]);
+    const second = await run(impl, text);
+
+    expect(calls).toHaveLength(0);
+    expect(second.got).toEqual(first.got);
+    expect(second.paras).toEqual(first.paras);
+    expect(second.got).toEqual([
+      { i: 0, ja: '習近平は会談した。', readings: [{ w: '習近平', r: 'しゅうきんぺい' }] },
+      { i: 1, ja: '二。', readings: [] },
+      { i: 2, ja: '三。', readings: [] },
+    ]);
+    expect(second.paras).toEqual([0, 1, 1]);
+  });
+
+  it('2 つ目の塊で失敗したあと呼び直すと、1 つ目の塊は保存した文を先に渡し、2 つ目からだけ要求する', async () => {
+    const text = `${long('One. Two.')}\n\nThree.`;
+    const p1 = done(line(0, '一。') + line(1, '二。'));
+    const failed = fakeFetch([sseResponse(p1), new Response('{}', { status: 500 })]);
+    const err = await run(failed.impl, text).catch((e) => e);
+    expect(err).toMatchObject({ kind: 'other' });
+    expect(failed.calls).toHaveLength(2);
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '三。')))]);
+    const { got, paras } = await run(impl, text);
+
+    expect(calls).toHaveLength(1);
+    expect((calls[0].body.messages as { content: string }[])[1].content).toBe('Three.');
+    expect((calls[0].body.messages as { content: string }[])[0].content).toContain('2 から');
+    expect(got.map((s) => [s.i, s.ja])).toEqual([
+      [0, '一。'],
+      [1, '二。'],
+      [2, '三。'],
+    ]);
+    expect(paras).toEqual([0, 0, 1]);
+  });
+
+  it.each([
+    ['中断（AbortError）', () => new DOMException('aborted', 'AbortError')],
+    ['通信エラー', () => new TypeError('network error')],
+  ])('受信の途中で %s になった塊は保存せず、次に訳すと要求し直す', async (_, cause) => {
+    const body = new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        ctrl.enqueue(enc.encode(sse(line(0, '一。'))));
+      },
+      pull(ctrl) {
+        ctrl.error(cause());
+      },
+    });
+    const broken = await run(fakeFetch([new Response(body)]).impl).catch((e) => e);
+    expect(broken).toBeTruthy();
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
+    const { got } = await run(impl);
+    expect(calls).toHaveLength(1);
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
+  });
+
+  it.each([
+    ['モデル', { model: 'openai/gpt-oss-120b' }],
+    ['原文の言語', { sourceLang: 'en' }],
+  ])('%s が違えば同じ原文でも要求する', async (_, diff: { model?: string; sourceLang?: string }) => {
+    await run(fakeFetch([sseResponse(done(line(0, '一。')))]).impl, 'One.', DEFAULT_MODEL, undefined, { sourceLang: 'auto' });
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, 'いち。')))]);
+    const { got } = await run(impl, 'One.', diff.model ?? DEFAULT_MODEL, undefined, { sourceLang: diff.sourceLang ?? 'auto' });
+    expect(calls).toHaveLength(1);
+    expect(got.map((s) => s.ja)).toEqual(['いち。']);
+  });
+
+  it('辞書の項目を増やしたり変えたりしても保存した結果を使う', async () => {
+    await run(fakeFetch([sseResponse(done(line(0, '習近平は会談した。')))]).impl, 'Xi met.', DEFAULT_MODEL, undefined, {
+      dict: [{ word: '習近平', reading: 'しゅうきんぺい' }],
+    });
+
+    const { impl, calls } = fakeFetch([]);
+    const { got } = await run(impl, 'Xi met.', DEFAULT_MODEL, undefined, {
+      dict: [
+        { word: '習近平', reading: 'しーじんぴん' },
+        { word: '会談', reading: 'かいだん' },
+      ],
+    });
+    expect(calls).toHaveLength(0);
+    expect(got.map((s) => s.ja)).toEqual(['習近平は会談した。']);
   });
 });
 
