@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Sentence } from '../types';
+import type { SavedSentence, Sentence } from '../types';
 import {
   DEFAULT_MODEL,
   MODELS,
@@ -70,7 +70,7 @@ async function run(
   text = 'Hello.',
   model = DEFAULT_MODEL,
   signal?: AbortSignal,
-  more: { sourceLang?: string; dict?: { word: string; reading: string }[] } = {},
+  more: { sourceLang?: string; dict?: { word: string; reading: string }[]; finished?: SavedSentence[][] } = {},
 ) {
   const got: Sentence[] = [];
   const paras: number[] = [];
@@ -85,15 +85,11 @@ async function run(
       got.push(s);
       paras.push(p);
     },
+    finished: more.finished,
     fetchImpl,
   });
   return { got, paras, result };
 }
-
-// 訳し終えた塊は localStorage に残るので、テストごとに消す
-beforeEach(() => {
-  localStorage.clear();
-});
 
 describe('MODELS', () => {
   it('速さ重視の gpt-oss-20b が既定でおすすめ、どちらも reasoning_effort low', () => {
@@ -434,21 +430,22 @@ describe('translateStream', () => {
   });
 });
 
-describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
+describe('translateStream の訳し終えた塊（§3.5）', () => {
   const done = (s: string) => sse(s) + 'data: [DONE]\n\n';
   const raw = (o: object) => JSON.stringify(o) + '\n';
 
-  it('同じ原文・言語・モデルの 2 回目は要求せず、同じ文と段落番号を同じ順で渡す', async () => {
+  it('finished に入っている塊は要求せず、前回と同じ文と段落番号を同じ順で渡す', async () => {
     const body = done(
       raw({ i: 0, p: 0, ja: '習近平は会談した。', readings: [{ w: '習近平', r: 'しゅうきんぺい' }] }) +
         raw({ i: 1, p: 1, ja: '二。', readings: [] }) +
         raw({ i: 2, p: 1, ja: '三。', readings: [] }),
     );
     const text = 'Xi met the PM.\n\nTwo. Three.';
-    const first = await run(fakeFetch([sseResponse(body)]).impl, text);
+    const finished: SavedSentence[][] = [];
+    const first = await run(fakeFetch([sseResponse(body)]).impl, text, DEFAULT_MODEL, undefined, { finished });
 
     const { impl, calls } = fakeFetch([]);
-    const second = await run(impl, text);
+    const second = await run(impl, text, DEFAULT_MODEL, undefined, { finished });
 
     expect(calls).toHaveLength(0);
     expect(second.got).toEqual(first.got);
@@ -461,16 +458,17 @@ describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
     expect(second.paras).toEqual([0, 1, 1]);
   });
 
-  it('2 つ目の塊で失敗したあと呼び直すと、1 つ目の塊は保存した文を先に渡し、2 つ目からだけ要求する', async () => {
+  it('2 つ目の塊で失敗したあと同じ finished で呼び直すと、1 つ目の塊は前回の文を先に渡し、2 つ目からだけ要求する', async () => {
     const text = `${long('One. Two.')}\n\nThree.`;
+    const finished: SavedSentence[][] = [];
     const p1 = done(line(0, '一。') + line(1, '二。'));
     const failed = fakeFetch([sseResponse(p1), new Response('{}', { status: 500 })]);
-    const err = await run(failed.impl, text).catch((e) => e);
+    const err = await run(failed.impl, text, DEFAULT_MODEL, undefined, { finished }).catch((e) => e);
     expect(err).toMatchObject({ kind: 'other' });
     expect(failed.calls).toHaveLength(2);
 
     const { impl, calls } = fakeFetch([sseResponse(done(line(0, '三。')))]);
-    const { got, paras } = await run(impl, text);
+    const { got, paras } = await run(impl, text, DEFAULT_MODEL, undefined, { finished });
 
     expect(calls).toHaveLength(1);
     expect((calls[0].body.messages as { content: string }[])[1].content).toBe('Three.');
@@ -486,7 +484,7 @@ describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
   it.each([
     ['中断（AbortError）', () => new DOMException('aborted', 'AbortError')],
     ['通信エラー', () => new TypeError('network error')],
-  ])('受信の途中で %s になった塊は保存せず、次に訳すと要求し直す', async (_, cause) => {
+  ])('受信の途中で %s になった塊は finished に入れず、呼び直すと要求し直す', async (_, cause) => {
     const body = new ReadableStream<Uint8Array>({
       start(ctrl) {
         ctrl.enqueue(enc.encode(sse(line(0, '一。'))));
@@ -495,11 +493,13 @@ describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
         ctrl.error(cause());
       },
     });
-    const broken = await run(fakeFetch([new Response(body)]).impl).catch((e) => e);
+    const finished: SavedSentence[][] = [];
+    const broken = await run(fakeFetch([new Response(body)]).impl, 'Hello.', DEFAULT_MODEL, undefined, { finished }).catch((e) => e);
     expect(broken).toBeTruthy();
+    expect(finished).toEqual([]);
 
     const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
-    const { got } = await run(impl);
+    const { got } = await run(impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
     expect(calls).toHaveLength(1);
     expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
   });
@@ -507,86 +507,46 @@ describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
   it.each([
     ['通信エラー', () => new TypeError('network error')],
     ['1 日の枠の 429', () => new Response('{}', { status: 429, headers: { 'retry-after': '3600', 'x-ratelimit-remaining-requests': '0' } })],
-  ])('壊れた行の再要求が %s で文を捨てた塊は保存せず、次に訳すと要求し直す', async (_, retry) => {
+    ['JSON にならない本文', () => new Response(JSON.stringify({ choices: [{ message: { content: 'まだ壊れている' } }] }), { status: 200 })],
+  ])('壊れた行の再要求が %s で文を捨てた塊は finished に入れず、呼び直すと要求し直す', async (_, retry) => {
+    const finished: SavedSentence[][] = [];
     const broken = done(line(0, '一。') + '{"i":1,"ja":"二\n');
-    const first = await run(fakeFetch([sseResponse(broken), retry()]).impl);
+    const first = await run(fakeFetch([sseResponse(broken), retry()]).impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
     expect(first.got.map((s) => s.ja)).toEqual(['一。']);
+    expect(finished).toEqual([]);
 
     const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
-    const { got } = await run(impl);
-    expect(calls).toHaveLength(1);
-    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
-  });
-
-  it('壊れた行の再要求でも JSON にならず文を捨てた塊は保存せず、次に訳すと要求し直す', async () => {
-    const broken = done(line(0, '一。') + '{"i":1,"ja":"二\n');
-    const retried = new Response(JSON.stringify({ choices: [{ message: { content: 'まだ壊れている' } }] }), { status: 200 });
-    const first = await run(fakeFetch([sseResponse(broken), retried]).impl);
-    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
-
-    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
-    const { got } = await run(impl);
-    expect(calls).toHaveLength(1);
-    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
-  });
-
-  it('出力の上限で打ち切られた（finish_reason が length の）塊は [DONE] があっても保存せず、次に訳すと要求し直す', async () => {
-    const cut = sse(line(0, '一。')) + `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n` + 'data: [DONE]\n\n';
-    const first = await run(fakeFetch([sseResponse(cut)]).impl);
-    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
-
-    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
-    const { got } = await run(impl);
-    expect(calls).toHaveLength(1);
-    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
-  });
-
-  it('finish_reason が stop の塊は保存する', async () => {
-    const ok = sse(line(0, '一。')) + `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n` + 'data: [DONE]\n\n';
-    await run(fakeFetch([sseResponse(ok)]).impl);
-
-    const { impl, calls } = fakeFetch([]);
-    const { got } = await run(impl);
-    expect(calls).toHaveLength(0);
-    expect(got.map((s) => s.ja)).toEqual(['一。']);
-  });
-
-  it('[DONE] を受け取らずにストリームが閉じた塊は保存せず、次に訳すと要求し直す', async () => {
-    const first = await run(fakeFetch([sseResponse(sse(line(0, '一。')))]).impl);
-    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
-
-    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
-    const { got } = await run(impl);
+    const { got } = await run(impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
     expect(calls).toHaveLength(1);
     expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
   });
 
   it.each([
-    ['モデル', { model: 'openai/gpt-oss-120b' }],
-    ['原文の言語', { sourceLang: 'en' }],
-  ])('%s が違えば同じ原文でも要求する', async (_, diff: { model?: string; sourceLang?: string }) => {
-    await run(fakeFetch([sseResponse(done(line(0, '一。')))]).impl, 'One.', DEFAULT_MODEL, undefined, { sourceLang: 'auto' });
+    // 出力の上限で打ち切られた塊は [DONE] があっても欠けている
+    ['finish_reason が length', sse(line(0, '一。')) + `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n` + 'data: [DONE]\n\n'],
+    ['[DONE] を受け取らずにストリームが閉じた', sse(line(0, '一。'))],
+  ])('%s 塊は finished に入れず、呼び直すと要求し直す', async (_, body) => {
+    const finished: SavedSentence[][] = [];
+    const first = await run(fakeFetch([sseResponse(body)]).impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
+    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
+    expect(finished).toEqual([]);
 
-    const { impl, calls } = fakeFetch([sseResponse(done(line(0, 'いち。')))]);
-    const { got } = await run(impl, 'One.', diff.model ?? DEFAULT_MODEL, undefined, { sourceLang: diff.sourceLang ?? 'auto' });
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
+    const { got } = await run(impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
     expect(calls).toHaveLength(1);
-    expect(got.map((s) => s.ja)).toEqual(['いち。']);
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
   });
 
-  it('辞書の項目を増やしたり変えたりしても保存した結果を使う', async () => {
-    await run(fakeFetch([sseResponse(done(line(0, '習近平は会談した。')))]).impl, 'Xi met.', DEFAULT_MODEL, undefined, {
-      dict: [{ word: '習近平', reading: 'しゅうきんぺい' }],
-    });
+  it('finish_reason が stop の塊は finished に入れ、呼び直しても要求しない', async () => {
+    const finished: SavedSentence[][] = [];
+    const ok = sse(line(0, '一。')) + `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n` + 'data: [DONE]\n\n';
+    await run(fakeFetch([sseResponse(ok)]).impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
+    expect(finished).toEqual([[{ p: 0, ja: '一。', readings: [] }]]);
 
     const { impl, calls } = fakeFetch([]);
-    const { got } = await run(impl, 'Xi met.', DEFAULT_MODEL, undefined, {
-      dict: [
-        { word: '習近平', reading: 'しーじんぴん' },
-        { word: '会談', reading: 'かいだん' },
-      ],
-    });
+    const { got } = await run(impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
     expect(calls).toHaveLength(0);
-    expect(got.map((s) => s.ja)).toEqual(['習近平は会談した。']);
+    expect(got.map((s) => s.ja)).toEqual(['一。']);
   });
 });
 

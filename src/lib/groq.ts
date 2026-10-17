@@ -1,7 +1,6 @@
 // Groq（OpenAI 互換 Chat Completions）とのやり取り（spec §3）
 import type { GroqError, SavedSentence, Sentence } from '../types';
 import { LineBuffer, parseSentenceLine, parseSseData } from './ndjson';
-import { chunkKey, loadChunk, saveChunk } from './storage';
 
 const API = 'https://api.groq.com/openai/v1';
 
@@ -180,6 +179,11 @@ export async function translateStream(opts: {
   onSentence: (s: Sentence, paragraph: number) => void; // paragraph は原文の段落番号（0 から）
   /** 1 分の枠に当たって待つ間は秒数、待ち終えたら null */
   onWait?: (sec: number | null) => void;
+  /**
+   * 訳し終えた塊の文を、塊の番号で引く置き場（§3.5）。入っている塊は要求せずにその文を渡し、
+   * 欠けなく受け取れた塊はここに入れる。同じ依頼を再試行するときだけ同じものを渡す
+   */
+  finished?: SavedSentence[][];
   fetchImpl?: typeof fetch;
 }): Promise<{ usage?: unknown }> {
   const fetchImpl = opts.fetchImpl ?? fetch;
@@ -211,7 +215,7 @@ export async function translateStream(opts: {
   let base = 0; // いまの塊の先頭の段落番号
   let count = 1; // いまの塊の段落の数
   let local = 0; // 直前の文の、塊の中での段落番号
-  let saved: SavedSentence[] = []; // いまの塊で渡した文（最後まで受け取れたら保存する）
+  let saved: SavedSentence[] = []; // いまの塊で渡した文（最後まで受け取れたら finished に入れる）
   let complete = true; // いまの塊を欠けなく受け取れたか（[DONE] を受け取り、打ち切られておらず、捨てた文が無い）
 
   // パースできた文に通し番号を振って渡す（モデルの i は使わない）。段落番号はモデルの p を使うが、
@@ -256,18 +260,17 @@ export async function translateStream(opts: {
     // JSON の行だけが文。空行・コードフェンス・前置きや後書きは再要求せずに飛ばす
     if (!t.startsWith('{')) return;
     const s = parseSentenceLine(t) ?? (await retryLine(paragraph, t));
-    // 再要求でも駄目ならその文は捨てる。欠けた塊を保存すると以後ずっと欠けたまま使うので、この塊は保存しない
+    // 再要求でも駄目ならその文は捨てる。欠けた塊を使い回すと再試行しても欠けたままなので、この塊は残さない
     if (s) emit(s);
     else complete = false;
   };
 
-  for (const chunk of chunkParagraphs(opts.text)) {
+  for (const [n, chunk] of chunkParagraphs(opts.text).entries()) {
     count = chunk.length;
     local = 0;
     const paragraph = chunk.join('\n\n');
-    // 訳し終えた塊は送らず、保存した文を通し番号を振り直して渡す（§3.5）
-    const key = chunkKey(opts.model, opts.sourceLang, paragraph);
-    const cached = loadChunk(key);
+    // 訳し終えた塊は送らず、前回渡した文を通し番号を振り直して渡す（§3.5）
+    const cached = opts.finished?.[n];
     if (cached) {
       for (const s of cached) opts.onSentence({ i: next++, ja: s.ja, readings: s.readings }, base + s.p);
       base += count;
@@ -314,10 +317,10 @@ export async function translateStream(opts: {
     await reader.cancel().catch(() => {});
     // 最後の文が改行で終わらなかった場合
     for (const l of content.flush()) await handleLine(paragraph, l);
-    // 最後まで受け取れた塊だけ保存する。中断・通信エラーなら上で投げているので保存しない。
-    // [DONE] を受け取らずに閉じた塊・finish_reason が stop 以外の塊・文を捨てた塊も保存しない。1 文も無ければ次も要求する
+    // 最後まで受け取れた塊だけ残す。中断・通信エラーなら上で投げているので残さない。
+    // [DONE] を受け取らずに閉じた塊・finish_reason が stop 以外の塊・文を捨てた塊も残さない。1 文も無ければ次も要求する
     if (!gotDone) complete = false;
-    if (complete && saved.length > 0) saveChunk(key, saved);
+    if (opts.finished && complete && saved.length > 0) opts.finished[n] = saved;
     base += count;
   }
 

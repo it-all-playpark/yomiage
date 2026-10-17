@@ -1,7 +1,7 @@
 // 翻訳セッションの状態（FR-2〜4）。文・トークン・この文だけの修正・選択中の語を持つ。
 // 画面を移っても残るようにモジュールの signal に置く。「この文だけ」の修正は保存しない（§7）
 import { signal } from '@preact/signals';
-import type { AiReading, DictData, Fix, GroqError, SpeechText, Token } from './types';
+import type { AiReading, DictData, Fix, GroqError, SavedSentence, SpeechText, Token } from './types';
 import type { Analyzer } from './lib/analyzer';
 import type { Speaker } from './lib/speech';
 import { isGroqError, translateStream } from './lib/groq';
@@ -49,6 +49,8 @@ export const view = signal<View>('display');
 
 let controller: AbortController | null = null;
 let lastRequest: TranslateRequest | null = null;
+/** lastRequest で訳し終えた塊の文（塊の番号で引く）。再試行でだけ使い、「翻訳する」では捨てる（§3.5） */
+let finished: SavedSentence[][] = [];
 
 // トークン id は文ごとに区切って振る（文をまたいで重ならない）
 const ID_STRIDE = 10000;
@@ -74,13 +76,23 @@ function replace(s: SessionSentence): void {
   sentences.value = sentences.value.map((x) => (x.i === s.i ? s : x));
 }
 
-/** 翻訳を始める。翻訳中なら前回を止める */
-export async function translate(req: TranslateRequest, env: SessionEnv): Promise<void> {
+/** 翻訳を始める。翻訳中なら前回を止める。訳し終えた塊があっても使わず、すべての塊を Groq に送る */
+export function translate(req: TranslateRequest, env: SessionEnv): Promise<void> {
+  return run(req, [], env);
+}
+
+/** 直前の翻訳をやり直す（通信エラーの再試行）。訳し終えた塊はメモリに持った結果を使い、Groq に送り直さない（§3.5） */
+export function retry(env: SessionEnv): Promise<void> {
+  return lastRequest ? run(lastRequest, finished, env) : Promise.resolve();
+}
+
+async function run(req: TranslateRequest, done: SavedSentence[][], env: SessionEnv): Promise<void> {
   const t0 = performance.now(); // NFR-1 / V4：押してから最初の speak まで
   controller?.abort();
   const ctrl = new AbortController();
   controller = ctrl;
   lastRequest = req;
+  finished = done;
 
   env.speaker?.stop();
   sentences.value = [];
@@ -101,6 +113,7 @@ export async function translate(req: TranslateRequest, env: SessionEnv): Promise
         .entries.filter((e) => req.text.includes(e.word))
         .map((e) => ({ word: e.word, reading: e.reading })),
       signal: ctrl.signal,
+      finished: done,
       fetchImpl: env.fetchImpl,
       onWait: (sec) => {
         if (ctrl === controller) rateWait.value = sec;
@@ -129,11 +142,6 @@ export async function translate(req: TranslateRequest, env: SessionEnv): Promise
       controller = null;
     }
   }
-}
-
-/** 直前の翻訳をやり直す（通信エラーの再試行）。訳し終えた塊は保存した結果を使い、Groq に送り直さない（§3.5） */
-export function retry(env: SessionEnv): Promise<void> {
-  return lastRequest ? translate(lastRequest, env) : Promise.resolve();
 }
 
 /** 辞書や解析器が変わったとき、全文のトークンと発話を作り直す */
@@ -201,6 +209,7 @@ export function resetSession(): void {
   controller?.abort();
   controller = null;
   lastRequest = null;
+  finished = [];
   sourceText.value = '';
   sourceLang.value = 'auto';
   sentences.value = [];

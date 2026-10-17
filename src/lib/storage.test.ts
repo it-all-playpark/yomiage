@@ -206,50 +206,6 @@ describe('書き出し・読み込み', () => {
   });
 });
 
-describe('訳し終えた塊', () => {
-  const sentences = [{ p: 0, ja: '習近平は会談した。', readings: [{ w: '習近平', r: 'しゅうきんぺい' }] }];
-
-  it('キーはモデル・原文の言語・原文のハッシュで作り、原文そのものは入れない', async () => {
-    const s = await load();
-    const text = 'Xi Jinping met the Prime Minister.';
-    const key = s.chunkKey(DEFAULT_MODEL, 'auto', text);
-    expect(key).not.toContain(text);
-    expect(key).not.toContain('Xi');
-    expect(key).toBe(s.chunkKey(DEFAULT_MODEL, 'auto', text));
-    expect(key).not.toBe(s.chunkKey('openai/gpt-oss-120b', 'auto', text));
-    expect(key).not.toBe(s.chunkKey(DEFAULT_MODEL, 'en', text));
-    expect(key).not.toBe(s.chunkKey(DEFAULT_MODEL, 'auto', text + ' '));
-
-    s.saveChunk(key, sentences);
-    const stored = localStorage.getItem('yomiage.chunks')!;
-    expect(JSON.parse(stored)).toEqual({ version: 1, entries: [{ key, sentences }] });
-    expect(stored).not.toContain(text);
-    expect(s.loadChunk(key)).toEqual(sentences);
-    expect(s.loadChunk(s.chunkKey(DEFAULT_MODEL, 'auto', 'other'))).toBeNull();
-  });
-
-  it('上限を超えたら保存した順に古いものから捨てる', async () => {
-    const s = await load();
-    for (let n = 0; n <= s.CHUNK_LIMIT; n++) s.saveChunk(`k${n}`, sentences);
-    expect(JSON.parse(localStorage.getItem('yomiage.chunks')!).entries).toHaveLength(s.CHUNK_LIMIT);
-    expect(s.loadChunk('k0')).toBeNull();
-    expect(s.loadChunk('k1')).toEqual(sentences);
-    expect(s.loadChunk(`k${s.CHUNK_LIMIT}`)).toEqual(sentences);
-  });
-
-  it('壊れた値・形式違いの塊は保存していないものとして扱う', async () => {
-    const s = await load();
-    localStorage.setItem('yomiage.chunks', '{broken');
-    expect(s.loadChunk('k')).toBeNull();
-    localStorage.setItem(
-      'yomiage.chunks',
-      JSON.stringify({ version: 1, entries: [{ key: 'bad', sentences: [{ p: -1, ja: 'x', readings: [] }] }, { key: 'good', sentences }] }),
-    );
-    expect(s.loadChunk('bad')).toBeNull();
-    expect(s.loadChunk('good')).toEqual(sentences);
-  });
-});
-
 describe('localStorage が使えない環境', () => {
   function breakStorage() {
     const err = () => {
@@ -283,19 +239,13 @@ describe('localStorage が使えない環境', () => {
     const d: DictData = { version: 1, entries: [entry('東雲', 'しののめ')] };
     s.saveDict(d);
     expect(s.loadDict()).toEqual(d);
-
-    const chunk = [{ p: 0, ja: '一。', readings: [] }];
-    s.saveChunk('k', chunk);
-    expect(s.loadChunk('k')).toEqual(chunk);
   });
 
   it('メモリの値は読み直す（画面を閉じる）と消える', async () => {
     breakStorage();
     const s1 = await load();
     s1.setKey('gsk_mem');
-    s1.saveChunk('k', [{ p: 0, ja: '一。', readings: [] }]);
     const s2 = await load();
     expect(s2.getKey()).toBeNull();
-    expect(s2.loadChunk('k')).toBeNull();
   });
 });

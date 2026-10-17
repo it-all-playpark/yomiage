@@ -24,7 +24,7 @@ export interface Sentence {
   readings: AiReading[];
 }
 
-/** 訳し終えた塊に保存する 1 文（§3.5・§7）。文番号は渡すときに振り直すので持たない */
+/** 訳し終えた塊の 1 文。再試行のときにメモリから使う（§3.5）。文番号は渡すときに振り直すので持たない */
 export interface SavedSentence {
   p: number; // 塊の中での段落番号（直前の文に合わせた後の値）
   ja: string;
