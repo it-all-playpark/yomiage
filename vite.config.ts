@@ -28,9 +28,27 @@ const kuromojiDict: Plugin = {
   },
 };
 
+// key は localStorage にあるので、読み込める script と送り先を絞り、依存が乗っ取られても外へ出せなくする。
+// GitHub Pages はヘッダーを付けられないので meta で入れる。dev は CSS を <style> で差し込むため build だけ
+const CSP = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self'",
+  "connect-src 'self' https://api.groq.com",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+
+const csp: Plugin = {
+  name: 'csp-meta',
+  apply: 'build',
+  transformIndexHtml: () => [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP }, injectTo: 'head-prepend' }],
+};
+
 export default defineConfig({
   base: './',
-  plugins: [kuromojiDict, preact()],
+  plugins: [kuromojiDict, csp, preact()],
   test: {
     environment: 'jsdom',
   },

@@ -10,6 +10,7 @@ async function load() {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -32,6 +33,24 @@ describe('API key', () => {
     expect(s.getKey()).toBe('gsk_abc');
     s.clearKey();
     expect(localStorage.getItem('yomiage.groqKey')).toBeNull();
+    expect(s.getKey()).toBeNull();
+  });
+
+  it('覚えておかない key は sessionStorage にだけ置き、覚える・消すで行き来する', async () => {
+    const s = await load();
+    s.setKey('gsk_abc');
+    s.setKey('gsk_abc', false);
+    expect(localStorage.getItem('yomiage.groqKey')).toBeNull();
+    expect(sessionStorage.getItem('yomiage.groqKey')).toBe('gsk_abc');
+    expect(s.getKey()).toBe('gsk_abc');
+    expect(s.isKeyRemembered()).toBe(false);
+    s.setKey('gsk_abc', true);
+    expect(localStorage.getItem('yomiage.groqKey')).toBe('gsk_abc');
+    expect(sessionStorage.getItem('yomiage.groqKey')).toBeNull();
+    expect(s.isKeyRemembered()).toBe(true);
+    s.setKey('gsk_abc', false);
+    s.clearKey();
+    expect(sessionStorage.getItem('yomiage.groqKey')).toBeNull();
     expect(s.getKey()).toBeNull();
   });
 });

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { Setup } from './Setup';
-import { apiKey, navigate, settings } from '../state';
+import { apiKey, navigate, rememberKey, settings } from '../state';
 
 vi.mock('../state', async () => {
   const { signal } = await import('@preact/signals');
   return {
     apiKey: signal<string | null>(null),
+    rememberKey: signal(true),
     settings: signal({ model: 'openai/gpt-oss-20b', voiceURI: '', rate: 1, showAllRuby: false }),
     navigate: vi.fn(),
   };
@@ -22,6 +23,7 @@ function typeKey(v: string) {
 
 beforeEach(() => {
   apiKey.value = null;
+  rememberKey.value = true;
   settings.value = { model: 'openai/gpt-oss-20b', voiceURI: '', rate: 1, showAllRuby: false };
   vi.mocked(navigate).mockClear();
 });
@@ -106,6 +108,14 @@ describe('Setup', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存してはじめる' }));
     expect(apiKey.value).toBe('gsk_go');
     expect(navigate).toHaveBeenCalledWith('#/');
+  });
+
+  it('「このブラウザに key を覚えておく」は rememberKey と連動する', () => {
+    render(<Setup />);
+    const check = screen.getByLabelText('このブラウザに key を覚えておく') as HTMLInputElement;
+    expect(check.checked).toBe(true);
+    fireEvent.click(check);
+    expect(rememberKey.value).toBe(false);
   });
 
   it('「このブラウザから key を削除」で key を消し、入力欄も空にする', async () => {

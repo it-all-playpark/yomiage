@@ -8,6 +8,7 @@ async function load() {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   history.replaceState(null, '', '/');
 });
 
@@ -75,6 +76,18 @@ describe('保存', () => {
     expect(localStorage.getItem('yomiage.groqKey')).toBe('gsk_abc');
     s.apiKey.value = null;
     expect(localStorage.getItem('yomiage.groqKey')).toBeNull();
+  });
+
+  it('rememberKey を外すと key をタブ限りにし、読み直すと外したまま key を戻す', async () => {
+    const s = await load();
+    expect(s.rememberKey.value).toBe(true);
+    s.apiKey.value = 'gsk_abc';
+    s.rememberKey.value = false;
+    expect(localStorage.getItem('yomiage.groqKey')).toBeNull();
+    expect(sessionStorage.getItem('yomiage.groqKey')).toBe('gsk_abc');
+    const again = await load();
+    expect(again.apiKey.value).toBe('gsk_abc');
+    expect(again.rememberKey.value).toBe(false);
   });
 
   it('settings と dict は変更時に保存される', async () => {

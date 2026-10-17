@@ -17,6 +17,10 @@
 
 サーバーは持たない。外部への通信は Groq の API と、自サイトの静的ファイルだけ。
 
+ビルドした `index.html` には CSP の meta を入れ、script・style・画像は自サイトだけ、通信先は自サイトと `https://api.groq.com` だけに絞る（`vite.config.ts`）。key は localStorage にあるので、依存が乗っ取られても key を外へ送れないようにするため。GitHub Pages はレスポンスヘッダーを付けられないので meta で入れる（meta では `frame-ancestors` が効かない）。dev サーバーは CSS を `<style>` で差し込むので、CSP は build だけに入れる。
+
+公開先は独自のサブドメインにする。`<owner>.github.io` は同じ owner の Pages 全部で 1 つのオリジンになり、localStorage はパスで分かれないので、ほかのリポジトリの Pages から key を読めてしまう。
+
 ## 2. 全体の流れ
 
 ```
@@ -155,7 +159,7 @@ interface Token {
 
 | キー | 内容 |
 |---|---|
-| `yomiage.groqKey` | Groq の API key（文字列） |
+| `yomiage.groqKey` | Groq の API key（文字列）。「このブラウザに key を覚えておく」を外したときは、localStorage ではなく sessionStorage の同じキーに置く（タブを閉じたら消える） |
 | `yomiage.settings` | `{ "model": string, "voiceURI": string, "rate": number, "showAllRuby": boolean }` |
 | `yomiage.dict` | `{ "version": 1, "entries": [{ "word": string, "reading": string, "source": "manual" \| "translation", "createdAt": string }] }` |
 
