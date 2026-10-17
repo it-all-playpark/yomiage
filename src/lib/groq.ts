@@ -212,7 +212,7 @@ export async function translateStream(opts: {
   let count = 1; // いまの塊の段落の数
   let local = 0; // 直前の文の、塊の中での段落番号
   let saved: SavedSentence[] = []; // いまの塊で渡した文（最後まで受け取れたら保存する）
-  let complete = true; // いまの塊を欠けなく受け取れたか（[DONE] を受け取り、再要求が通信エラーで落ちていない）
+  let complete = true; // いまの塊を欠けなく受け取れたか（[DONE] を受け取り、打ち切られておらず、捨てた文が無い）
 
   // パースできた文に通し番号を振って渡す（モデルの i は使わない）。段落番号はモデルの p を使うが、
   // 無いとき・戻るとき・塊の外を指すときは直前の文と同じ段落にする
@@ -239,8 +239,6 @@ export async function translateStream(opts: {
     } catch (e) {
       // 中断は止める。429・通信エラー・JSON として読めない本文なら、その文だけ捨てて続ける
       if (isAbort(e)) throw e;
-      // 一時的な失敗で欠けた塊を保存すると以後ずっと欠けたまま使うので、この塊は保存しない
-      complete = false;
       return null;
     }
     if (body?.usage) usages.push(body.usage);
@@ -258,8 +256,9 @@ export async function translateStream(opts: {
     // JSON の行だけが文。空行・コードフェンス・前置きや後書きは再要求せずに飛ばす
     if (!t.startsWith('{')) return;
     const s = parseSentenceLine(t) ?? (await retryLine(paragraph, t));
-    // 再要求でも駄目ならその文は捨てる
+    // 再要求でも駄目ならその文は捨てる。欠けた塊を保存すると以後ずっと欠けたまま使うので、この塊は保存しない
     if (s) emit(s);
+    else complete = false;
   };
 
   for (const chunk of chunkParagraphs(opts.text)) {
@@ -298,6 +297,9 @@ export async function translateStream(opts: {
       for (const sseLine of sseLines) {
         const usage = usageOf(sseLine);
         if (usage) usages.push(usage);
+        // 出力の上限（length）などで打ち切られた塊は、[DONE] が来ても欠けている
+        const finish = finishReasonOf(sseLine);
+        if (finish && finish !== 'stop') complete = false;
         const delta = parseSseData(sseLine);
         if (delta === 'DONE') {
           done = true;
@@ -313,7 +315,7 @@ export async function translateStream(opts: {
     // 最後の文が改行で終わらなかった場合
     for (const l of content.flush()) await handleLine(paragraph, l);
     // 最後まで受け取れた塊だけ保存する。中断・通信エラーなら上で投げているので保存しない。
-    // [DONE] を受け取らずに閉じた塊・再要求が通信エラーや 429 で落ちた塊も保存しない。1 文も無ければ次も要求する
+    // [DONE] を受け取らずに閉じた塊・finish_reason が stop 以外の塊・文を捨てた塊も保存しない。1 文も無ければ次も要求する
     if (!gotDone) complete = false;
     if (complete && saved.length > 0) saveChunk(key, saved);
     base += count;
@@ -330,6 +332,19 @@ function usageOf(line: string): unknown {
   try {
     const o = JSON.parse(data);
     return o?.x_groq?.usage ?? o?.usage ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** SSE の 1 行から choices[0].finish_reason を取り出す（打ち切りの判定用） */
+function finishReasonOf(line: string): string | undefined {
+  if (!line.startsWith('data:')) return undefined;
+  const data = line.slice(5).trim();
+  if (!data.startsWith('{')) return undefined;
+  try {
+    const r = JSON.parse(data)?.choices?.[0]?.finish_reason;
+    return typeof r === 'string' ? r : undefined;
   } catch {
     return undefined;
   }
