@@ -150,14 +150,33 @@ describe('Speaker', () => {
     expect(state.sentence).toBe(2);
   });
 
-  it('積み直しても始まらなければ、上限回数で諦めて次の文へ進む', () => {
+  it('積み直すたびに待ち時間を延ばし、上限回数を超えたら諦めて次の文へ進む', () => {
     speaker.setSentence(0, st('あ'));
     speaker.setSentence(1, st('い'));
     synth.stuck.push(...Array<string>(MAX_RESTARTS + 1).fill('あ'));
     speaker.play();
-    vi.advanceTimersByTime(START_TIMEOUT_MS * (MAX_RESTARTS + 1));
-    expect(synth.spoken.map((u) => u.text)).toEqual([...Array<string>(MAX_RESTARTS + 1).fill('あ'), 'い']);
+    const spoken = () => synth.spoken.map((u) => u.text);
+    // n 回目に積んだ発話は START_TIMEOUT_MS * n 待つ
+    for (let n = 1; n <= MAX_RESTARTS + 1; n++) {
+      vi.advanceTimersByTime(START_TIMEOUT_MS * n - 1);
+      expect(spoken()).toHaveLength(n);
+      vi.advanceTimersByTime(1);
+    }
+    expect(spoken()).toEqual([...Array<string>(MAX_RESTARTS + 1).fill('あ'), 'い']);
     expect(state).toMatchObject({ playing: true, sentence: 1 });
+  });
+
+  it('積み直した後に読み始めが遅れても、延ばした待ち時間の内なら取り消さない', () => {
+    speaker.setSentence(0, st('あ'));
+    synth.stuck.push('あ', 'あ');
+    speaker.play();
+    vi.advanceTimersByTime(START_TIMEOUT_MS);
+    // 2 回目も止まっていて、読み始めるのが 2 回目の待ち時間の直前
+    vi.advanceTimersByTime(START_TIMEOUT_MS * 2 - 1);
+    synth.current.onstart?.();
+    vi.advanceTimersByTime(START_TIMEOUT_MS * 10);
+    expect(synth.spoken).toHaveLength(2);
+    expect(state).toMatchObject({ playing: true, sentence: 0 });
   });
 
   it('読み始めた文は、読み終えるまで時間がかかっても積み直さない', () => {
@@ -179,6 +198,19 @@ describe('Speaker', () => {
     vi.advanceTimersByTime(START_TIMEOUT_MS);
     expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'あ']);
     expect(state).toMatchObject({ playing: true, paused: false, sentence: 0 });
+  });
+
+  it('見張りの時間の途中で再開しても、再開したときから START_TIMEOUT_MS は積み直さない', () => {
+    speaker.setSentence(0, st('あ'));
+    synth.stuck.push('あ');
+    speaker.play();
+    speaker.pause();
+    vi.advanceTimersByTime(START_TIMEOUT_MS * 1.5);
+    speaker.play();
+    vi.advanceTimersByTime(START_TIMEOUT_MS - 1);
+    expect(synth.spoken).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'あ']);
   });
 
   it('先の文が抜けていれば、その文が届くまで後ろは積まない', () => {

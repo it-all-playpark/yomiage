@@ -5,7 +5,8 @@
 import type { SpeechText } from '../types';
 import { tokenAtCharIndex } from './speechText';
 
-// 積んでからこの時間 start も end も来なければ、止まったとみなして積み直す
+// 積んでからこの時間 start も end も来なければ、止まったとみなして積み直す。
+// 読み始めが遅いだけの声（オンライン音声など）を飛ばさないよう、積み直すたびにこの時間ずつ延ばす
 export const START_TIMEOUT_MS = 2000;
 // 1 文を積み直す回数の上限。超えたら読み終えた扱いで次の文へ進む
 export const MAX_RESTARTS = 2;
@@ -49,6 +50,8 @@ export class Speaker {
   private afterPreview: 'resume' | 'follow' | null = null;
   // 積んだ発話を読み終えるまで持っておく（参照が切れると onend が来ないブラウザがある）
   private live = new Set<SpeechSynthesisUtterance>();
+  // 一時停止中に見張りの時間が来たとき、再開したら見張りを張り直す
+  private rewatch: (() => void) | null = null;
 
   constructor(
     private synth: SpeechSynthesis,
@@ -88,6 +91,9 @@ export class Speaker {
     if (this.state.paused) {
       this.synth.resume();
       this.update({ paused: false });
+      const rewatch = this.rewatch;
+      this.rewatch = null;
+      rewatch?.();
       return;
     }
     if (!this.state.playing) this.startFrom(0);
@@ -233,11 +239,12 @@ export class Speaker {
       if (gen !== this.gen) return;
       done(gen);
     };
+    const timeout = START_TIMEOUT_MS * (restarts + 1);
     const watch = () => {
       if (!waiting || gen !== this.gen) return;
-      // 一時停止中は始まらなくて当たり前なので、再開してから測る
+      // 一時停止中は始まらなくて当たり前なので、再開したときから測り直す
       if (this.state.paused) {
-        setTimeout(watch, START_TIMEOUT_MS);
+        this.rewatch = () => setTimeout(watch, timeout);
         return;
       }
       // 始まらずに止まっている。取り消し、古い発話のイベントは世代番号で捨てる
@@ -250,7 +257,7 @@ export class Speaker {
       } else done(this.gen);
     };
     this.speak(u);
-    setTimeout(watch, START_TIMEOUT_MS);
+    setTimeout(watch, timeout);
   }
 
   private applyVoice(u: SpeechSynthesisUtterance): void {
