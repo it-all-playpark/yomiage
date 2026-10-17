@@ -30,7 +30,7 @@ const synth = vi.hoisted(() => {
   return s;
 });
 
-import { analyzer, apiKey, dict, settings } from '../state';
+import { analyzer, apiKey, dict, settings, sharedText } from '../state';
 import { resetSession } from '../session';
 import { Main } from './Main';
 
@@ -59,6 +59,7 @@ beforeEach(() => {
   resetSession();
   synth.spoken = [];
   apiKey.value = 'gsk_test';
+  sharedText.value = null;
   dict.value = { version: 1, entries: [] };
   analyzer.value = null;
   settings.value = { ...settings.value, showAllRuby: false };
@@ -88,6 +89,26 @@ describe('Main', () => {
     expect(within(alert).getByRole('link', { name: '設定画面で key を登録' }).getAttribute('href')).toBe('#/setup');
     fireEvent.input(screen.getByLabelText('翻訳する文章'), { target: { value: 'hello' } });
     expect((screen.getByRole('button', { name: '翻訳する' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('URL で渡された本文は原文に入れてすぐ訳す', async () => {
+    sharedText.value = 'Xi held talks.';
+    render(<Main />);
+    await screen.findByRole('button', { name: '習近平（しゅうきんぺい）の読みを直す' });
+    expect((screen.getByLabelText('翻訳する文章') as HTMLTextAreaElement).value).toBe('Xi held talks.');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).messages.at(-1).content).toContain('Xi held talks.');
+    expect(sharedText.value).toBeNull();
+  });
+
+  it('key が無ければ URL の本文を残し、key が入ったときに訳す', async () => {
+    apiKey.value = null;
+    sharedText.value = 'Xi held talks.';
+    render(<Main />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sharedText.value).toBe('Xi held talks.');
+    apiKey.value = 'gsk_test';
+    await screen.findByRole('button', { name: '習近平（しゅうきんぺい）の読みを直す' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('Ctrl+Enter で翻訳し、届いた 1 文目を表示して読み上げる', async () => {

@@ -23,6 +23,23 @@ describe('ルーティング', () => {
     expect((await load()).route.value).toBe('#/');
   });
 
+  it('#/?text= で開くと本文を取り出し、ハッシュを #/ に戻して翻訳画面にする', async () => {
+    history.replaceState(null, '', '/yomiage/?x=1#/?text=Hello+world%E3%80%82%0A2%25');
+    const s = await load();
+    expect(s.sharedText.value).toBe('Hello world。\n2%');
+    expect(location.pathname + location.search + location.hash).toBe('/yomiage/?x=1#/');
+    expect(s.route.value).toBe('#/');
+  });
+
+  it('text が無い・空白だけなら本文は無い', async () => {
+    history.replaceState(null, '', '/#/?text=%20%0A');
+    expect((await load()).sharedText.value).toBeNull();
+    history.replaceState(null, '', '/#/dict');
+    const s = await load();
+    expect(s.sharedText.value).toBeNull();
+    expect(location.hash).toBe('#/dict');
+  });
+
   it('navigate でハッシュと route が変わる', async () => {
     const s = await load();
     s.navigate('#/setup');
