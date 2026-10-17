@@ -1,7 +1,7 @@
 // 翻訳と読み上げ（FR-2〜4）。モックは docs/mock/Main.dc.html
 import { useEffect, useState } from 'preact/hooks';
 import type { Token } from '../types';
-import { analyzer, apiKey, dict, settings, speaker } from '../state';
+import { analyzer, apiKey, dict, settings, sharedText, speaker } from '../state';
 import {
   applyFix,
   error,
@@ -50,6 +50,15 @@ export function Main() {
     if (!key || text === '') return;
     void translate({ key, model: settings.value.model, text, sourceLang: sourceLang.value }, env);
   };
+
+  // URL で渡された本文は原文に入れてすぐ訳す。key が無ければ、登録して戻ってきたときに訳す
+  useEffect(() => {
+    const t = sharedText.value;
+    if (t === null || !key) return;
+    sharedText.value = null;
+    sourceText.value = t;
+    run();
+  }, [key]);
 
   const pick = (sentence: number, t: Token) => {
     selection.value = { sentence, tokenId: t.id };

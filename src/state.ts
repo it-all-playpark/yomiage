@@ -19,6 +19,18 @@ function parseRoute(hash: string): Route {
   return hash === '#/setup' || hash === '#/dict' ? hash : '#/';
 }
 
+// `#/?text=…`（Cmd+C C などから開く入口）の本文を取り出し、ハッシュを #/ に戻す
+function takeSharedText(): string | null {
+  const m = /^#\/\?(.*)$/.exec(location.hash);
+  if (!m) return null;
+  history.replaceState(null, '', location.pathname + location.search + '#/');
+  const text = new URLSearchParams(m[1]).get('text');
+  return text && text.trim() !== '' ? text : null;
+}
+
+/** URL で渡された本文。翻訳画面が key のある状態で開いたときに訳して null に戻す */
+export const sharedText = signal<string | null>(takeSharedText());
+
 export const route = signal<Route>(parseRoute(location.hash));
 window.addEventListener('hashchange', () => {
   route.value = parseRoute(location.hash);
