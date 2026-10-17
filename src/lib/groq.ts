@@ -1,6 +1,7 @@
 // Groq（OpenAI 互換 Chat Completions）とのやり取り（spec §3）
-import type { GroqError, Sentence } from '../types';
+import type { GroqError, SavedSentence, Sentence } from '../types';
 import { LineBuffer, parseSentenceLine, parseSseData } from './ndjson';
+import { chunkKey, loadChunk, saveChunk } from './storage';
 
 const API = 'https://api.groq.com/openai/v1';
 
@@ -210,12 +211,15 @@ export async function translateStream(opts: {
   let base = 0; // いまの塊の先頭の段落番号
   let count = 1; // いまの塊の段落の数
   let local = 0; // 直前の文の、塊の中での段落番号
+  let saved: SavedSentence[] = []; // いまの塊で渡した文（最後まで受け取れたら保存する）
+  let complete = true; // いまの塊を欠けなく受け取れたか（[DONE] を受け取り、再要求が通信エラーで落ちていない）
 
   // パースできた文に通し番号を振って渡す（モデルの i は使わない）。段落番号はモデルの p を使うが、
   // 無いとき・戻るとき・塊の外を指すときは直前の文と同じ段落にする
   const emit = (s: Sentence) => {
     if (s.p !== undefined && s.p >= local && s.p < count) local = s.p;
     const { p: _, ...rest } = s;
+    saved.push({ p: local, ja: s.ja, readings: s.readings });
     opts.onSentence({ ...rest, i: next++ }, base + local);
   };
 
@@ -235,6 +239,8 @@ export async function translateStream(opts: {
     } catch (e) {
       // 中断は止める。429・通信エラー・JSON として読めない本文なら、その文だけ捨てて続ける
       if (isAbort(e)) throw e;
+      // 一時的な失敗で欠けた塊を保存すると以後ずっと欠けたまま使うので、この塊は保存しない
+      complete = false;
       return null;
     }
     if (body?.usage) usages.push(body.usage);
@@ -260,6 +266,16 @@ export async function translateStream(opts: {
     count = chunk.length;
     local = 0;
     const paragraph = chunk.join('\n\n');
+    // 訳し終えた塊は送らず、保存した文を通し番号を振り直して渡す（§3.5）
+    const key = chunkKey(opts.model, opts.sourceLang, paragraph);
+    const cached = loadChunk(key);
+    if (cached) {
+      for (const s of cached) opts.onSentence({ i: next++, ja: s.ja, readings: s.readings }, base + s.p);
+      base += count;
+      continue;
+    }
+    saved = [];
+    complete = true;
     const messages = buildMessages(paragraph, { sourceLang: opts.sourceLang, dictHints: opts.dict, startIndex: next });
     const res = await post(messages, true);
     if (!res.body) throw toGroqError('network');
@@ -269,6 +285,7 @@ export async function translateStream(opts: {
     const sse = new LineBuffer();
     const content = new LineBuffer();
     let done = false;
+    let gotDone = false;
     while (!done) {
       let chunk: ReadableStreamReadResult<Uint8Array>;
       try {
@@ -284,6 +301,7 @@ export async function translateStream(opts: {
         const delta = parseSseData(sseLine);
         if (delta === 'DONE') {
           done = true;
+          gotDone = true;
           break;
         }
         if (delta === null) continue;
@@ -294,6 +312,10 @@ export async function translateStream(opts: {
     await reader.cancel().catch(() => {});
     // 最後の文が改行で終わらなかった場合
     for (const l of content.flush()) await handleLine(paragraph, l);
+    // 最後まで受け取れた塊だけ保存する。中断・通信エラーなら上で投げているので保存しない。
+    // [DONE] を受け取らずに閉じた塊・再要求が通信エラーや 429 で落ちた塊も保存しない。1 文も無ければ次も要求する
+    if (!gotDone) complete = false;
+    if (complete && saved.length > 0) saveChunk(key, saved);
     base += count;
   }
 

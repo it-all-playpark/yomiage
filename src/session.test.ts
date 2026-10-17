@@ -63,6 +63,8 @@ const S0 = { i: 0, ja: '習近平は会談した。', readings: [{ w: '習近平
 const S1 = { i: 0, ja: '習近平が話した。', readings: [] };
 
 beforeEach(() => {
+  // 訳し終えた塊は localStorage に残るので、テストごとに消す
+  localStorage.clear();
   resetSession();
   vi.spyOn(console, 'info').mockImplementation(() => {});
 });
@@ -131,6 +133,51 @@ describe('translate', () => {
     expect(error.value).toBeNull();
     expect(sentences.value).toHaveLength(1);
     expect(JSON.parse(fetchImpl.mock.calls[1][1].body).messages[1].content).toBe('only');
+  });
+
+  it('2 つ目の塊で失敗したあとの再試行は、訳し終えた塊を送り直さず、最初から読み始める', async () => {
+    // 1 つで 2000 文字を超える段落は、次の段落と別の塊になる
+    const text = `Xi met the PM.${' x'.repeat(1000)}\n\nXi spoke.`;
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(sseResponse([S0]))
+      .mockResolvedValueOnce(new Response('', { status: 500 }))
+      .mockResolvedValueOnce(sseResponse([S1]));
+    const { env, sp } = makeEnv(fetchImpl as unknown as typeof fetch);
+    await translate({ ...REQ, text }, env);
+    expect(error.value).toMatchObject({ kind: 'other' });
+    sp.play.mockClear();
+    sp.setSentence.mockClear();
+
+    await retry(env);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(fetchImpl.mock.calls[2][1].body).messages[1].content).toBe('Xi spoke.');
+    expect(error.value).toBeNull();
+    expect(sentences.value.map((s) => [s.i, s.p, s.ja])).toEqual([
+      [0, 0, '習近平は会談した。'],
+      [1, 1, '習近平が話した。'],
+    ]);
+    // 保存した文も Groq から受け取ったときと同じに読みを決めて渡し、1 文目で読み始める
+    expect(sentences.value[0].tokens.find((t) => t.text === '習近平')).toMatchObject({ fix: 'ai', reading: 'しゅうきんぺい' });
+    expect(sp.setSentence).toHaveBeenNthCalledWith(1, 0, expect.objectContaining({ text: 'しゅうきんぺいは会談した。' }));
+    expect(sp.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('訳し終えた塊を localStorage に書き込めなくても、翻訳を続けてエラーを出さない', async () => {
+    const setItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+      if (k === 'yomiage.chunks') throw new DOMException('full', 'QuotaExceededError');
+      setItem.call(this, k, v);
+    });
+    const fetchImpl = vi.fn().mockResolvedValueOnce(sseResponse([{ ...S0, p: 0 }, { ...S1, p: 1 }]));
+    const { env } = makeEnv(fetchImpl as unknown as typeof fetch);
+
+    await translate(REQ, env);
+
+    expect(error.value).toBeNull();
+    expect(sentences.value.map((s) => s.ja)).toEqual(['習近平は会談した。', '習近平が話した。']);
+    expect(translating.value).toBe(false);
   });
 });
 

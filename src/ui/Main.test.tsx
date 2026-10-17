@@ -56,6 +56,8 @@ const S0 = { i: 0, ja: '習近平は会談した。', readings: [{ w: '習近平
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  // 訳し終えた塊は localStorage に残るので、テストごとに消す（同じ原文を何度も訳すため）
+  localStorage.clear();
   resetSession();
   synth.spoken = [];
   apiKey.value = 'gsk_test';
