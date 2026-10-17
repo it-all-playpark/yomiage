@@ -190,6 +190,8 @@
 }
 .main-sent {
   border-radius: 3px;
+  /* 語以外をクリックするとその文から読む */
+  cursor: pointer;
 }
 .tok {
   padding: 0 1px;
@@ -317,7 +319,8 @@
 .fix-field .input {
   font-size: 16px;
 }
-.fix-preview {
+.fix-preview,
+.fix-play-from {
   color: var(--accent);
 }
 .fix-err {

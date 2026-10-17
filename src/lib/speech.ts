@@ -106,8 +106,9 @@ export class Speaker {
     this.update({ paused: true });
   }
 
-  restart(): void {
-    this.startFrom(0);
+  /** その文から読む（最初から読む・文のクリック）。読み上げ中でも一時停止中でも、取り消してその文から読み直す */
+  playFrom(index: number): void {
+    this.startFrom(index);
   }
 
   /** 止めて登録済みの文も捨てる（新しい翻訳を始めるとき） */

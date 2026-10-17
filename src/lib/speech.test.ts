@@ -459,11 +459,34 @@ describe('Speaker', () => {
     speaker.setSentence(1, st('い'));
     speaker.play();
     synth.end();
-    speaker.restart();
+    speaker.playFrom(0);
     expect(synth.texts).toEqual(['あ']);
     expect(state).toMatchObject({ playing: true, sentence: 0 });
-    // あ・い・（restart で）あ。取り消した「い」の end では次を積まない
+    // あ・い・（playFrom で）あ。取り消した「い」の end では次を積まない
     expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'い', 'あ']);
+  });
+
+  it('playFrom：途中の文から読み始め、読み終えたら続きの文を読む', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.setSentence(2, st('う'));
+    speaker.playFrom(1);
+    expect(synth.texts).toEqual(['い']);
+    expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
+    expect(state).toMatchObject({ sentence: 2 });
+  });
+
+  it('playFrom：一時停止中でも一時停止を解いてその文から読む', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.play();
+    speaker.pause();
+    speaker.playFrom(1);
+    expect(synth.paused).toBe(false);
+    expect(synth.texts).toEqual(['い']);
+    expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
   });
 
   it('respeakFrom：読み上げ中なら作り直した文から読み直す', () => {

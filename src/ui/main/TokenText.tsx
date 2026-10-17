@@ -1,4 +1,4 @@
-// 訳文のトークン表示（§4.3）。漢字の語はクリックで修正パネルを開く（FR-4.3）
+// 訳文のトークン表示（§4.3）。漢字の語はクリックで修正パネルを開く（FR-4.3）。それ以外をクリックするとその文から読む
 import type { Token } from '../../types';
 import type { SpeakerState } from '../../lib/speech';
 import { hasKanji } from '../../lib/analyzer';
@@ -12,6 +12,7 @@ export function TokenText(props: {
   selectedId: number | null;
   receiving: boolean;
   onPick: (sentence: number, token: Token) => void;
+  onPlayFrom: (sentence: number) => void;
 }) {
   const { view, showAllRuby, speaking, selectedId } = props;
   const kana = view === 'kana';
@@ -29,7 +30,17 @@ export function TokenText(props: {
         // boundary が来ない声では文全体をハイライト（§6）
         const wholeSentence = current && (!speaking.boundarySupported || speaking.tokenId === null);
         return (
-          <span key={s.i} class={wholeSentence ? 'main-sent is-speaking' : 'main-sent'} data-sentence={s.i}>
+          <span
+            key={s.i}
+            class={wholeSentence ? 'main-sent is-speaking' : 'main-sent'}
+            data-sentence={s.i}
+            onClick={(e) => {
+              // 語のクリックは修正パネル、ドラッグで文字を選んだとき（コピーなど）は読み始めない
+              if ((e.target as Element).closest('.tok-word')) return;
+              if (!(window.getSelection()?.isCollapsed ?? true)) return;
+              props.onPlayFrom(s.i);
+            }}
+          >
             {s.tokens.map((t) => {
               const fixed = t.fix !== 'none' && t.reading !== null;
               const cls = [
