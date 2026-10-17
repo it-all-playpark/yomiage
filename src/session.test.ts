@@ -63,7 +63,7 @@ const S0 = { i: 0, ja: '習近平は会談した。', readings: [{ w: '習近平
 const S1 = { i: 0, ja: '習近平が話した。', readings: [] };
 
 beforeEach(() => {
-  // 訳し終えた塊は localStorage に残るので、テストごとに消す
+  // 古い版が残した yomiage.chunks を置くテストがあるので、テストごとに消す
   localStorage.clear();
   resetSession();
   vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -158,26 +158,77 @@ describe('translate', () => {
       [0, 0, '習近平は会談した。'],
       [1, 1, '習近平が話した。'],
     ]);
-    // 保存した文も Groq から受け取ったときと同じに読みを決めて渡し、1 文目で読み始める
+    // 前回の文も Groq から受け取ったときと同じに読みを決めて渡し、1 文目で読み始める
     expect(sentences.value[0].tokens.find((t) => t.text === '習近平')).toMatchObject({ fix: 'ai', reading: 'しゅうきんぺい' });
     expect(sp.setSentence).toHaveBeenNthCalledWith(1, 0, expect.objectContaining({ text: 'しゅうきんぺいは会談した。' }));
     expect(sp.play).toHaveBeenCalledTimes(1);
   });
+});
 
-  it('訳し終えた塊を localStorage に書き込めなくても、翻訳を続けてエラーを出さない', async () => {
-    const setItem = Storage.prototype.setItem;
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
-      if (k === 'yomiage.chunks') throw new DOMException('full', 'QuotaExceededError');
-      setItem.call(this, k, v);
-    });
-    const fetchImpl = vi.fn().mockResolvedValueOnce(sseResponse([{ ...S0, p: 0 }, { ...S1, p: 1 }]));
+describe('訳し終えた塊（§3.5）', () => {
+  // 1 つで 2000 文字を超える段落は、次の段落と別の塊になる
+  const P1 = `Xi met the PM.${' x'.repeat(1000)}`;
+  const TEXT = `${P1}\n\nXi spoke.`;
+  const user = (fetchImpl: ReturnType<typeof vi.fn>, n: number) => JSON.parse(fetchImpl.mock.calls[n][1].body).messages[1].content;
+
+  it('同じ原文・言語・モデルで続けて翻訳すると、2 回目もすべての塊を要求する', async () => {
+    const fetchImpl = vi.fn(async () => sseResponse([S0]));
     const { env } = makeEnv(fetchImpl as unknown as typeof fetch);
 
-    await translate(REQ, env);
+    await translate({ ...REQ, text: TEXT }, env);
+    await translate({ ...REQ, text: TEXT }, env);
 
-    expect(error.value).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect([2, 3].map((n) => user(fetchImpl, n))).toEqual([P1, 'Xi spoke.']);
+    expect(sentences.value.map((s) => s.ja)).toEqual(['習近平は会談した。', '習近平は会談した。']);
+  });
+
+  it('再試行のあとに別の原文を翻訳すると、同じ塊の原文が含まれていても要求する', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(sseResponse([S0]))
+      .mockResolvedValueOnce(new Response('', { status: 500 }))
+      .mockImplementation(async () => sseResponse([S1]));
+    const { env } = makeEnv(fetchImpl as unknown as typeof fetch);
+    await translate({ ...REQ, text: TEXT }, env);
+    await retry(env);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+
+    await translate({ ...REQ, text: `${P1}\n\nXi left.` }, env);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
+    expect([3, 4].map((n) => user(fetchImpl, n))).toEqual([P1, 'Xi left.']);
+    expect(sentences.value.map((s) => s.ja)).toEqual(['習近平が話した。', '習近平が話した。']);
+  });
+
+  it('翻訳・再試行のどちらでも localStorage の yomiage.chunks を読みも書きもしない', async () => {
+    // 古い版がこの原文の塊を保存していた形
+    const old = JSON.stringify({
+      version: 1,
+      entries: [
+        { key: 'openai/gpt-oss-20b|auto|7f5fj663u2', sentences: [{ p: 0, ja: '古い訳。', readings: [] }] },
+        { key: 'openai/gpt-oss-20b|auto|ly61q8ymdu', sentences: [{ p: 0, ja: '古い訳。', readings: [] }] },
+      ],
+    });
+    localStorage.setItem('yomiage.chunks', old);
+    const getItem = vi.spyOn(Storage.prototype, 'getItem');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(sseResponse([S0]))
+      .mockResolvedValueOnce(new Response('', { status: 500 }))
+      .mockResolvedValueOnce(sseResponse([S1]));
+    const { env } = makeEnv(fetchImpl as unknown as typeof fetch);
+
+    await translate({ ...REQ, text: TEXT }, env);
+    await retry(env);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
     expect(sentences.value.map((s) => s.ja)).toEqual(['習近平は会談した。', '習近平が話した。']);
-    expect(translating.value).toBe(false);
+    expect(getItem.mock.calls.filter(([k]) => k === 'yomiage.chunks')).toEqual([]);
+    expect(setItem.mock.calls.filter(([k]) => k === 'yomiage.chunks')).toEqual([]);
+    expect(localStorage.getItem('yomiage.chunks')).toBe(old);
+    expect(localStorage.length).toBe(1);
   });
 });
 
