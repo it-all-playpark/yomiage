@@ -38,3 +38,11 @@ pnpm preview    # dist/ を配信して確認
 ## 公開
 
 `main` に push すると `.github/workflows/pages.yml` がテスト・ビルドして GitHub Pages に公開する。初回はリポジトリの Settings → Pages で Source を「GitHub Actions」にする。
+
+公開先は独自のサブドメインにする（`it-all-playpark.github.io` のままだと、同じ owner のほかの Pages と localStorage を共有し、key を読まれうる。[spec §1](docs/spec.md)）。
+
+1. GitHub の owner の Settings → Pages → Verified domains で `playpark.co.jp` を検証する（TXT レコード。ほかの人がサブドメインを乗っ取れないようにする）
+2. DNS に `CNAME <サブドメイン> → it-all-playpark.github.io` を足す
+3. リポジトリの Settings → Pages → Custom domain にサブドメインを入れ、証明書が出たら Enforce HTTPS を入れる
+
+切り替えると `it-all-playpark.github.io/yomiage/` は新しいドメインへ転送され、古いオリジンの key は画面から消せなくなる。切り替える前に古い URL の設定画面で「このブラウザから key を削除」を押しておく。

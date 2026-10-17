@@ -2,7 +2,7 @@
 import { useState } from 'preact/hooks';
 import type { GroqError } from '../types';
 import { MODELS, testConnection } from '../lib/groq';
-import { apiKey, navigate, settings } from '../state';
+import { apiKey, navigate, rememberKey, settings } from '../state';
 import '../styles/setup.css';
 
 type Status =
@@ -138,6 +138,17 @@ export function Setup() {
               このブラウザから key を削除しました。
             </div>
           )}
+          <label class="setup-check">
+            <input
+              type="checkbox"
+              checked={rememberKey.value}
+              onChange={(e) => {
+                rememberKey.value = e.currentTarget.checked;
+              }}
+            />
+            このブラウザに key を覚えておく
+          </label>
+          <span class="setup-sub">外すと、このタブを閉じたときに key を消します。次に使うときは貼り直してください。</span>
         </div>
 
         <div class="setup-field">
@@ -187,7 +198,8 @@ export function Setup() {
           <li>key はこのブラウザの中にだけ保存されます。</li>
           <li>文章と key は Groq に直接送られます。このアプリの開発者のサーバーは通りません。</li>
           <li>料金は登録した Groq アカウントの無料枠の範囲です。上限は Groq の画面で確認できます。</li>
-          <li>共有のパソコンで使ったときは、終わったら key を削除してください。</li>
+          <li>共有のパソコンでは「このブラウザに key を覚えておく」を外すか、終わったら key を削除してください。</li>
+          <li>Groq の画面で使用量の上限を決めておくと、key が漏れたときの被害を抑えられます。</li>
         </ul>
       </aside>
     </main>

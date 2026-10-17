@@ -46,16 +46,41 @@ function parseJson(s: string | null): unknown {
 
 // ---- API key ----
 
-export function getKey(): string | null {
-  return read(KEY_GROQ);
+/** 覚えておかない key の置き場。タブを閉じると消える。使えなければ null（key は画面の状態にだけ残る） */
+function sessionStore(): Storage | null {
+  try {
+    const probe = 'yomiage.__probe__';
+    sessionStorage.setItem(probe, '1');
+    sessionStorage.removeItem(probe);
+    return sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
-export function setKey(k: string): void {
-  write(KEY_GROQ, k);
+export function getKey(): string | null {
+  return read(KEY_GROQ) ?? sessionStore()?.getItem(KEY_GROQ) ?? null;
+}
+
+/** key をこのブラウザに覚えている（タブを閉じても残る）か */
+export function isKeyRemembered(): boolean {
+  return read(KEY_GROQ) !== null;
+}
+
+/** remember が false なら、タブを閉じたら消える場所にだけ置く */
+export function setKey(k: string, remember = true): void {
+  if (remember) {
+    write(KEY_GROQ, k);
+    sessionStore()?.removeItem(KEY_GROQ);
+  } else {
+    remove(KEY_GROQ);
+    sessionStore()?.setItem(KEY_GROQ, k);
+  }
 }
 
 export function clearKey(): void {
   remove(KEY_GROQ);
+  sessionStore()?.removeItem(KEY_GROQ);
 }
 
 // ---- 設定 ----

@@ -5,6 +5,7 @@ import { japaneseVoices, Speaker } from './lib/speech';
 import {
   clearKey,
   getKey,
+  isKeyRemembered,
   loadDict,
   loadSettings,
   saveDict,
@@ -32,9 +33,11 @@ export function navigate(r: Route): void {
 export const storageOk: boolean = storageAvailable();
 
 export const apiKey = signal<string | null>(getKey());
+/** false なら key はタブを閉じたら消える。未登録のときは覚えておく方を既定にする */
+export const rememberKey = signal<boolean>(apiKey.value === null || isKeyRemembered());
 effect(() => {
   const k = apiKey.value;
-  if (k) setKey(k);
+  if (k) setKey(k, rememberKey.value);
   else clearKey();
 });
 
