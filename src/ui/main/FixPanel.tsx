@@ -14,6 +14,7 @@ export const SOURCE_LABEL: Record<Fix, string> = {
 export function FixPanel(props: {
   token: Token;
   onPreview: (reading: string) => void;
+  onPlayFrom: () => void;
   onSave: (reading: string, target: 'once' | 'dict') => void;
   onCancel: () => void;
 }) {
@@ -91,6 +92,9 @@ export function FixPanel(props: {
             <path d="M7 4.5v15l12-7.5z" />
           </svg>
           試聴
+        </button>
+        <button type="button" class="btn fix-play-from" onClick={props.onPlayFrom}>
+          この文から読む
         </button>
       </div>
       {invalid && (

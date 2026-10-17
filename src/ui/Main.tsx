@@ -101,7 +101,7 @@ export function Main() {
         <p class="main-sub">
           {kana
             ? '読み上げにはこの文を使います。かなにするのは直した語だけで、ほかは漢字のまま渡すので、イントネーションが崩れにくくなります。'
-            : '読みが違う語は、クリックするとその場で直せます。'}
+            : '読みが違う語は、クリックするとその場で直せます。語以外の所をクリックすると、その文から読み上げます。'}
         </p>
 
         {wait !== null && (
@@ -133,6 +133,7 @@ export function Main() {
             selectedId={sel?.tokenId ?? null}
             receiving={translating.value}
             onPick={pick}
+            onPlayFrom={(i) => speaker?.playFrom(i)}
           />
         )}
 
@@ -155,6 +156,10 @@ export function Main() {
           <FixPanel
             token={selToken}
             onPreview={(r) => speaker?.preview(r)}
+            onPlayFrom={() => {
+              selection.value = null;
+              speaker?.playFrom(sel.sentence);
+            }}
             onCancel={() => (selection.value = null)}
             onSave={(reading, target) => applyFix({ sentence: sel.sentence, word: selToken.text, reading, target }, env)}
           />
@@ -170,7 +175,7 @@ export function Main() {
             </svg>
             {copied ? 'コピーしました' : '訳文をコピー'}
           </button>
-          <button type="button" class="btn" disabled={!speaker || list.length === 0} onClick={() => speaker?.restart()}>
+          <button type="button" class="btn" disabled={!speaker || list.length === 0} onClick={() => speaker?.playFrom(0)}>
             <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
               <path d="M3 3v5h5" />

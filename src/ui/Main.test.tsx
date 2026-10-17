@@ -238,6 +238,32 @@ describe('Main', () => {
     expect([...document.querySelectorAll('.main-text > p')].map((p) => p.textContent)).toEqual(['一。二。', '三。']);
   });
 
+  it('文の語以外をクリックするとその文から読み、語のクリックやドラッグ選択では読み始めない', async () => {
+    fetchMock.mockResolvedValueOnce(sseResponse([S0, { i: 1, p: 0, ja: 'それから帰った。', readings: [] }]));
+    const word = await translateOnce();
+    await waitFor(() => expect(document.querySelector('.main-receiving')).toBeNull());
+    expect(synth.spoken.map((u) => u.text)).toEqual(['しゅうきんぺいは会談した。']);
+
+    fireEvent.click(document.querySelector('[data-sentence="1"]')!);
+    expect(synth.spoken.map((u) => u.text)).toEqual(['しゅうきんぺいは会談した。', 'それから帰った。']);
+
+    fireEvent.click(word);
+    expect(synth.spoken).toHaveLength(2);
+    fireEvent.keyDown(screen.getByLabelText('読み（ひらがな）'), { key: 'Escape' });
+
+    const sel = vi.spyOn(window, 'getSelection').mockReturnValue({ isCollapsed: false } as Selection);
+    fireEvent.click(document.querySelector('[data-sentence="0"]')!);
+    expect(synth.spoken).toHaveLength(2);
+    sel.mockRestore();
+  });
+
+  it('修正パネルの「この文から読む」でパネルを閉じてその文から読む', async () => {
+    fireEvent.click(await translateOnce());
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'この文から読む' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(synth.spoken.map((u) => u.text)).toEqual(['しゅうきんぺいは会談した。', 'しゅうきんぺいは会談した。']);
+  });
+
   it('ふりがなをすべて表示で、自動解析の語にもルビが付く（設定に保存）', async () => {
     await translateOnce();
     // 解析器が後から届くと全文を作り直す
