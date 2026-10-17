@@ -223,9 +223,13 @@ describe('Main', () => {
   });
 
   it('訳文は原文の段落ごとに分けて表示する', async () => {
-    fetchMock
-      .mockResolvedValueOnce(sseResponse([{ i: 0, ja: '一。', readings: [] }, { i: 1, ja: '二。', readings: [] }]))
-      .mockResolvedValueOnce(sseResponse([{ i: 0, ja: '三。', readings: [] }]));
+    fetchMock.mockResolvedValueOnce(
+      sseResponse([
+        { i: 0, p: 0, ja: '一。', readings: [] },
+        { i: 1, p: 0, ja: '二。', readings: [] },
+        { i: 2, p: 1, ja: '三。', readings: [] },
+      ]),
+    );
     render(<Main />);
     const ta = screen.getByLabelText('翻訳する文章');
     fireEvent.input(ta, { target: { value: 'One. Two.\n\nThree.' } });
@@ -262,5 +266,34 @@ describe('Main', () => {
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
     await screen.findByRole('button', { name: '習近平（しゅうきんぺい）の読みを直す' });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('1 分の枠の 429 は待っている間だけ知らせ、待ち終えたら続きを訳す', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429, headers: { 'retry-after': '1', 'x-ratelimit-remaining-tokens': '0' } }));
+    render(<Main />);
+    fireEvent.input(screen.getByLabelText('翻訳する文章'), { target: { value: 'a' } });
+    fireEvent.click(screen.getByRole('button', { name: '翻訳する' }));
+    await screen.findByText(/約 1 秒待ってから続きを訳します/);
+
+    await screen.findByRole('button', { name: '習近平（しゅうきんぺい）の読みを直す' }, { timeout: 3000 });
+    expect(screen.queryByText(/続きを訳します/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('429 は 1 分の枠なら再試行ボタンを出し、1 日の枠なら出さない', async () => {
+    // 待ち時間が分からない 1 分の枠は自動では待たない
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429, headers: { 'x-ratelimit-remaining-tokens': '0' } }));
+    render(<Main />);
+    fireEvent.input(screen.getByLabelText('翻訳する文章'), { target: { value: 'a' } });
+    fireEvent.click(screen.getByRole('button', { name: '翻訳する' }));
+    const minute = await screen.findByRole('alert');
+    expect(minute.textContent).toContain('1 分あたりの上限');
+    expect(within(minute).getByRole('button', { name: '再試行' })).toBeTruthy();
+
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429, headers: { 'retry-after': '3600', 'x-ratelimit-remaining-requests': '0' } }));
+    fireEvent.click(screen.getByRole('button', { name: '翻訳する' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('1 日の上限'));
+    expect(within(screen.getByRole('alert')).queryByRole('button', { name: '再試行' })).toBeNull();
   });
 });

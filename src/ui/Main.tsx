@@ -7,6 +7,7 @@ import {
   error,
   findToken,
   fixedWords,
+  rateWait,
   rebuildAll,
   retry,
   selection,
@@ -33,6 +34,7 @@ export function Main() {
   const sel = selection.value;
   const selToken = sel ? findToken(sel.sentence, sel.tokenId) : null;
   const err = error.value;
+  const wait = rateWait.value;
   const showAllRuby = settings.value.showAllRuby;
   const kana = view.value === 'kana';
   const speaking = useSpeakerState(speaker);
@@ -102,11 +104,17 @@ export function Main() {
             : '読みが違う語は、クリックするとその場で直せます。'}
         </p>
 
+        {wait !== null && (
+          <p role="status" class="main-wait">
+            Groq の 1 分あたりの上限に達したので、約 {wait} 秒待ってから続きを訳します
+          </p>
+        )}
+
         {err && (
           <div role="alert" class="main-error">
             <span>{err.message}</span>
             {err.kind === 'auth' && <a href="#/setup">設定画面で key を確かめる</a>}
-            {(err.kind === 'network' || err.kind === 'other') && (
+            {(err.kind === 'network' || err.kind === 'other' || (err.kind === 'rate' && err.scope === 'minute')) && (
               <button type="button" class="btn" onClick={() => void retry(env)}>
                 再試行
               </button>

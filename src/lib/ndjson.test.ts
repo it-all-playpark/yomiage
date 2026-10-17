@@ -31,6 +31,13 @@ describe('parseSentenceLine', () => {
     expect(parseSentenceLine('{"i":3,"ja":"はい。"}')).toEqual({ i: 3, ja: 'はい。', readings: [] });
   });
 
+  it('段落番号 p は 0 以上の整数なら持ち、形式違反なら文は残して p だけ落とす', () => {
+    expect(parseSentenceLine('{"i":0,"p":2,"ja":"はい。"}')).toEqual({ i: 0, p: 2, ja: 'はい。', readings: [] });
+    for (const p of ['-1', '1.5', '"1"']) {
+      expect(parseSentenceLine(`{"i":0,"p":${p},"ja":"はい。"}`)).toEqual({ i: 0, ja: 'はい。', readings: [] });
+    }
+  });
+
   it.each([
     ['途中で切れた JSON', '{"i":0,"ja":"中国の'],
     ['JSON でない', 'こんにちは'],

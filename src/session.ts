@@ -42,6 +42,8 @@ export const sourceLang = signal<string>('auto');
 export const sentences = signal<SessionSentence[]>([]);
 export const translating = signal(false);
 export const error = signal<GroqError | null>(null);
+/** 1 分の枠に当たって待っている秒数（§3.6）。待っていなければ null */
+export const rateWait = signal<number | null>(null);
 export const selection = signal<{ sentence: number; tokenId: number } | null>(null);
 export const view = signal<View>('display');
 
@@ -84,6 +86,7 @@ export async function translate(req: TranslateRequest, env: SessionEnv): Promise
   sentences.value = [];
   selection.value = null;
   error.value = null;
+  rateWait.value = null;
   translating.value = true;
 
   try {
@@ -99,6 +102,9 @@ export async function translate(req: TranslateRequest, env: SessionEnv): Promise
         .map((e) => ({ word: e.word, reading: e.reading })),
       signal: ctrl.signal,
       fetchImpl: env.fetchImpl,
+      onWait: (sec) => {
+        if (ctrl === controller) rateWait.value = sec;
+      },
       onSentence: (s, p) => {
         if (ctrl !== controller) return;
         const ss = build(s.i, p, s.ja, s.readings, new Map(), env);
@@ -119,6 +125,7 @@ export async function translate(req: TranslateRequest, env: SessionEnv): Promise
   } finally {
     if (ctrl === controller) {
       translating.value = false;
+      rateWait.value = null;
       controller = null;
     }
   }
@@ -199,6 +206,7 @@ export function resetSession(): void {
   sentences.value = [];
   translating.value = false;
   error.value = null;
+  rateWait.value = null;
   selection.value = null;
   view.value = 'display';
 }

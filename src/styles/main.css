@@ -166,6 +166,16 @@
   font-weight: 700;
 }
 
+.main-wait {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--warn-dot);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-weight: 500;
+}
+
 /* 訳文（§4.3） */
 .main-text {
   padding: 8px 4px;

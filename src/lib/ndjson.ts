@@ -45,7 +45,9 @@ export function parseSentenceLine(line: string): Sentence | null {
     if (typeof w !== 'string' || typeof reading !== 'string' || w === '' || reading === '') return null;
     readings.push({ w, r: reading });
   }
-  return { i: o.i, ja: o.ja, readings };
+  // p は段落の区切りにしか使わないので、無い・形式違反でも文は捨てない
+  const p = typeof o.p === 'number' && Number.isInteger(o.p) && o.p >= 0 ? { p: o.p } : {};
+  return { i: o.i, ...p, ja: o.ja, readings };
 }
 
 /** SSE の 1 行から choices[0].delta.content を取り出す。終端は 'DONE'、内容が無い行は null */
