@@ -505,6 +505,30 @@ describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
   });
 
   it.each([
+    ['通信エラー', () => new TypeError('network error')],
+    ['1 日の枠の 429', () => new Response('{}', { status: 429, headers: { 'retry-after': '3600', 'x-ratelimit-remaining-requests': '0' } })],
+  ])('壊れた行の再要求が %s で文を捨てた塊は保存せず、次に訳すと要求し直す', async (_, retry) => {
+    const broken = done(line(0, '一。') + '{"i":1,"ja":"二\n');
+    const first = await run(fakeFetch([sseResponse(broken), retry()]).impl);
+    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
+    const { got } = await run(impl);
+    expect(calls).toHaveLength(1);
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
+  });
+
+  it('[DONE] を受け取らずにストリームが閉じた塊は保存せず、次に訳すと要求し直す', async () => {
+    const first = await run(fakeFetch([sseResponse(sse(line(0, '一。')))]).impl);
+    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
+    const { got } = await run(impl);
+    expect(calls).toHaveLength(1);
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
+  });
+
+  it.each([
     ['モデル', { model: 'openai/gpt-oss-120b' }],
     ['原文の言語', { sourceLang: 'en' }],
   ])('%s が違えば同じ原文でも要求する', async (_, diff: { model?: string; sourceLang?: string }) => {
