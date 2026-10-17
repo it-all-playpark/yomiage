@@ -1,0 +1,37 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Asia/Tokyo",
+  "description": [
+    "流量制御は zernio-cli / shift-bud / corporate-site と同じ形に揃える。",
+    "schedule: 日曜・月曜（JST）の 48h 窓。Mend hosted の無料枠は実行間隔が保証されず、狭い窓だとジョブが 1 回落ちるとその週が丸ごと飛ぶ（shift-bud で 3 週間 PR が 0 本になった）。",
+    "minimumReleaseAge: リリース直後の版（取り下げ・壊れた publish）を掴まない。週次スケジュールと合わせて連続リリースを 1 本の PR に畳む。",
+    "rebaseWhen: 既定の auto は main が動くたびに open 中の全 Renovate PR を rebase する。コンフリクト時のみにする。",
+    "base は main（dev ブランチ運用はしない）。Pages workflow は main への push でしか走らないので、Renovate PR 自体にはテストが付かず、マージした時点で test → build → 公開になる。automerge は付けない。"
+  ],
+  "schedule": ["* * * * 0,1"],
+  "prConcurrentLimit": 3,
+  "minimumReleaseAge": "3 days",
+  "rebaseWhen": "conflicted",
+  "packageRules": [
+    {
+      "description": "非 major（minor / patch / pin / digest）は 1 PR にまとめる。major は separateMajorMinor の既定どおり個別 PR のまま残し、破壊的変更を単独でレビュー・revert できる状態を保つ。",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-minor-patch"
+    },
+    {
+      "description": "vitest は vite の major に peer で縛られ、@preact/preset-vite も vite を peer に取るので、vitest / vite / @preact/preset-vite は同じ PR で動かす。rangeStrategy: bump で package.json の range も lockfile と一緒に動かし、範囲外の解決が lockfile だけで静かに入るのを防ぐ（shift-bud #1367）。packageRules は後勝ちなので non-major グループより後ろに置く。",
+      "matchPackageNames": ["vitest", "@vitest/**", "vite", "@vitejs/**", "@preact/preset-vite"],
+      "groupName": "vite toolchain",
+      "groupSlug": "vite-toolchain",
+      "rangeStrategy": "bump"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "description": "脆弱性由来の更新はスケジュールと熟成待ちの対象外にし、即時に単独 PR を作る。",
+    "schedule": ["at any time"],
+    "minimumReleaseAge": null,
+    "groupName": null
+  }
+}
