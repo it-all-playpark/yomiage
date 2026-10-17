@@ -1,7 +1,14 @@
 // 読み上げ（spec §6）。1 文 1 発話で speechSynthesis に積む。
-// 合成側に積むのは常に 1 発話だけにし、読み終えてから次の文を積む（Chrome は複数積むと途中の onend が来ずに止まることがある）
+// 合成側に積むのは常に 1 発話だけにし、読み終えてから次の文を積む。
+// macOS の Chrome は speak した発話が始まらないまま speaking で止まることがある（声・速さ・積み方によらない）。
+// cancel して同じ文を積み直すとそこから読み続けるので、一定時間始まらなければ積み直す
 import type { SpeechText } from '../types';
 import { tokenAtCharIndex } from './speechText';
+
+// 積んでからこの時間 start も end も来なければ、止まったとみなして積み直す
+export const START_TIMEOUT_MS = 2000;
+// 1 文を積み直す回数の上限。超えたら読み終えた扱いで次の文へ進む
+export const MAX_RESTARTS = 2;
 
 export interface SpeakerState {
   playing: boolean;
@@ -190,12 +197,15 @@ export class Speaker {
   }
 
   // next の文を 1 発話だけ積む。読み終えたら、次の文が届いていれば続けて積む
-  private speakNext(gen: number): void {
+  private speakNext(gen: number, restarts = 0): void {
     const index = this.next++;
     const st = this.sentences.get(index)!;
     const u = this.makeUtterance(st.text);
     this.applyVoice(u);
+    // start も end もまだ来ていない
+    let waiting = true;
     u.onstart = () => {
+      waiting = false;
       if (gen !== this.gen) return;
       this.head = index;
       this.update({ sentence: index, tokenId: null });
@@ -207,19 +217,40 @@ export class Speaker {
       const tokenId = cur && cur.text === st.text ? tokenAtCharIndex(cur, e.charIndex) : null;
       this.update({ boundarySupported: true, tokenId });
     };
-    // 合成に失敗した発話も onerror で終わる扱いにする
-    u.onend = u.onerror = () => {
-      this.live.delete(u);
-      if (gen !== this.gen) return;
+    const done = (g: number) => {
       if (this.sentences.has(this.next)) {
-        this.speakNext(gen);
+        this.speakNext(g);
         return;
       }
       // 届いている文を読み終えた。次の文が届けば続ける
       this.following = true;
       this.update({ playing: false, paused: false, sentence: null, tokenId: null });
     };
+    // 合成に失敗した発話も onerror で終わる扱いにする
+    u.onend = u.onerror = () => {
+      waiting = false;
+      this.live.delete(u);
+      if (gen !== this.gen) return;
+      done(gen);
+    };
+    const watch = () => {
+      if (!waiting || gen !== this.gen) return;
+      // 一時停止中は始まらなくて当たり前なので、再開してから測る
+      if (this.state.paused) {
+        setTimeout(watch, START_TIMEOUT_MS);
+        return;
+      }
+      // 始まらずに止まっている。取り消し、古い発話のイベントは世代番号で捨てる
+      this.gen++;
+      this.synth.cancel();
+      this.live.clear();
+      if (restarts < MAX_RESTARTS) {
+        this.next = index;
+        this.speakNext(this.gen, restarts + 1);
+      } else done(this.gen);
+    };
     this.speak(u);
+    setTimeout(watch, START_TIMEOUT_MS);
   }
 
   private applyVoice(u: SpeechSynthesisUtterance): void {

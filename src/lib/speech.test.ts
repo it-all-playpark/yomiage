@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpeechText } from '../types';
-import { Speaker, japaneseVoices, type SpeakerState } from './speech';
+import { MAX_RESTARTS, START_TIMEOUT_MS, Speaker, japaneseVoices, type SpeakerState } from './speech';
 
 interface FakeUtterance {
   text: string;
@@ -17,6 +17,8 @@ interface FakeUtterance {
 class FakeSynth {
   queue: FakeUtterance[] = [];
   spoken: FakeUtterance[] = [];
+  // 読み始めずに止まる発話の文字列。1 回止まるごとに 1 つ消える（Chrome で speak した発話が始まらないことがある）
+  stuck: string[] = [];
   paused = false;
   voices = [
     { voiceURI: 'haruka', lang: 'ja-JP', name: 'Haruka' },
@@ -30,7 +32,12 @@ class FakeSynth {
   speak(u: FakeUtterance) {
     this.spoken.push(u);
     this.queue.push(u);
-    if (this.queue.length === 1) u.onstart?.();
+    if (this.queue.length === 1) this.start(u);
+  }
+  private start(u: FakeUtterance) {
+    const i = this.stuck.indexOf(u.text);
+    if (i >= 0) this.stuck.splice(i, 1);
+    else u.onstart?.();
   }
   cancel() {
     const q = this.queue;
@@ -52,8 +59,10 @@ class FakeSynth {
   }
   end() {
     const u = this.queue.shift()!;
+    // onend の中で積まれた発話は speak で読み始めるので、ここで始めるのは前から待っていた発話だけ
+    const waiting = this.queue[0];
     u.onend?.();
-    this.queue[0]?.onstart?.();
+    if (waiting) this.start(waiting);
   }
   get texts() {
     return this.queue.map((u) => u.text);
@@ -84,9 +93,14 @@ let speaker: Speaker;
 let state: SpeakerState;
 
 beforeEach(() => {
+  vi.useFakeTimers();
   synth = new FakeSynth();
   speaker = new Speaker(synth as unknown as SpeechSynthesis, makeUtterance);
   speaker.onState((s) => (state = s));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('japaneseVoices', () => {
@@ -113,6 +127,58 @@ describe('Speaker', () => {
     expect(synth.texts).toEqual(['お']);
     synth.end();
     expect(state).toMatchObject({ playing: false, sentence: null });
+  });
+
+  it('積んだ文が始まらずに止まったら、取り消して同じ文を積み直し、続きを読む', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    speaker.setSentence(2, st('う'));
+    synth.stuck.push('い');
+    speaker.play();
+    synth.end();
+    expect(synth.texts).toEqual(['い']);
+    expect(state.sentence).toBe(0);
+
+    vi.advanceTimersByTime(START_TIMEOUT_MS - 1);
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'い']);
+    vi.advanceTimersByTime(1);
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'い', 'い']);
+    expect(state).toMatchObject({ playing: true, sentence: 1 });
+
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
+    expect(state.sentence).toBe(2);
+  });
+
+  it('積み直しても始まらなければ、上限回数で諦めて次の文へ進む', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.setSentence(1, st('い'));
+    synth.stuck.push(...Array<string>(MAX_RESTARTS + 1).fill('あ'));
+    speaker.play();
+    vi.advanceTimersByTime(START_TIMEOUT_MS * (MAX_RESTARTS + 1));
+    expect(synth.spoken.map((u) => u.text)).toEqual([...Array<string>(MAX_RESTARTS + 1).fill('あ'), 'い']);
+    expect(state).toMatchObject({ playing: true, sentence: 1 });
+  });
+
+  it('読み始めた文は、読み終えるまで時間がかかっても積み直さない', () => {
+    speaker.setSentence(0, st('あ'));
+    speaker.play();
+    vi.advanceTimersByTime(START_TIMEOUT_MS * 10);
+    expect(synth.spoken).toHaveLength(1);
+  });
+
+  it('一時停止中は始まっていなくても積み直さず、再開してから測る', () => {
+    speaker.setSentence(0, st('あ'));
+    synth.stuck.push('あ');
+    speaker.play();
+    speaker.pause();
+    vi.advanceTimersByTime(START_TIMEOUT_MS * 10);
+    expect(synth.spoken).toHaveLength(1);
+
+    speaker.play();
+    vi.advanceTimersByTime(START_TIMEOUT_MS);
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'あ']);
+    expect(state).toMatchObject({ playing: true, paused: false, sentence: 0 });
   });
 
   it('先の文が抜けていれば、その文が届くまで後ろは積まない', () => {
