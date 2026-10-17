@@ -1,4 +1,5 @@
-// 読み上げ（spec §6）。1 文 1 発話で speechSynthesis に積む
+// 読み上げ（spec §6）。1 文 1 発話で speechSynthesis に積む。
+// 合成側に積むのは常に 1 発話だけにし、読み終えてから次の文を積む（Chrome は複数積むと途中の onend が来ずに止まることがある）
 import type { SpeechText } from '../types';
 import { tokenAtCharIndex } from './speechText';
 
@@ -29,7 +30,7 @@ export class Speaker {
   private listeners = new Set<(s: SpeakerState) => void>();
   // cancel 後に古い発話から届くイベントを捨てるための世代番号
   private gen = 0;
-  // 次に積む文番号
+  // 今の文を読み終えたら次に積む文番号
   private next = 0;
   // 読み終えて次の文を待っている（届いたら続けて読む）
   private following = false;
@@ -64,12 +65,11 @@ export class Speaker {
 
   setSentence(index: number, st: SpeechText): void {
     this.sentences.set(index, st);
-    if (((this.state.playing && this.parked === null) || this.following) && index === this.next) {
-      if (this.following) {
-        this.following = false;
-        this.update({ playing: true });
-      }
-      this.enqueueFrom(this.gen);
+    // 読み上げ中に届いた文は、今の文を読み終えたとき積む
+    if (this.following && index === this.next) {
+      this.following = false;
+      this.update({ playing: true });
+      this.speakNext(this.gen);
     }
   }
 
@@ -162,7 +162,7 @@ export class Speaker {
     this.next = index;
     this.head = index;
     this.update({ playing: true });
-    this.enqueueFrom(this.gen);
+    this.speakNext(this.gen);
   }
 
   // 発話を全部取り消して止まった状態にする
@@ -189,35 +189,37 @@ export class Speaker {
     this.synth.speak(u);
   }
 
-  // next から連続して届いている文を積む
-  private enqueueFrom(gen: number): void {
-    while (this.sentences.has(this.next)) {
-      const index = this.next++;
-      const st = this.sentences.get(index)!;
-      const u = this.makeUtterance(st.text);
-      this.applyVoice(u);
-      u.onstart = () => {
-        if (gen !== this.gen) return;
-        this.head = index;
-        this.update({ sentence: index, tokenId: null });
-      };
-      u.onboundary = (e) => {
-        if (gen !== this.gen || e.name === 'sentence') return;
-        // 積んだ後にトークンを作り直していれば id が変わっているので、今の対応表を使う。文が変わっていれば語は特定しない
-        const cur = this.sentences.get(index);
-        const tokenId = cur && cur.text === st.text ? tokenAtCharIndex(cur, e.charIndex) : null;
-        this.update({ boundarySupported: true, tokenId });
-      };
-      // 合成に失敗した発話も onerror で終わる扱いにする
-      u.onend = u.onerror = () => {
-        this.live.delete(u);
-        if (gen !== this.gen || index !== this.next - 1) return;
-        // 最後に積んだ文を読み終えた。次の文が届けば続ける
-        this.following = true;
-        this.update({ playing: false, paused: false, sentence: null, tokenId: null });
-      };
-      this.speak(u);
-    }
+  // next の文を 1 発話だけ積む。読み終えたら、次の文が届いていれば続けて積む
+  private speakNext(gen: number): void {
+    const index = this.next++;
+    const st = this.sentences.get(index)!;
+    const u = this.makeUtterance(st.text);
+    this.applyVoice(u);
+    u.onstart = () => {
+      if (gen !== this.gen) return;
+      this.head = index;
+      this.update({ sentence: index, tokenId: null });
+    };
+    u.onboundary = (e) => {
+      if (gen !== this.gen || e.name === 'sentence') return;
+      // 積んだ後にトークンを作り直していれば id が変わっているので、今の対応表を使う。文が変わっていれば語は特定しない
+      const cur = this.sentences.get(index);
+      const tokenId = cur && cur.text === st.text ? tokenAtCharIndex(cur, e.charIndex) : null;
+      this.update({ boundarySupported: true, tokenId });
+    };
+    // 合成に失敗した発話も onerror で終わる扱いにする
+    u.onend = u.onerror = () => {
+      this.live.delete(u);
+      if (gen !== this.gen) return;
+      if (this.sentences.has(this.next)) {
+        this.speakNext(gen);
+        return;
+      }
+      // 届いている文を読み終えた。次の文が届けば続ける
+      this.following = true;
+      this.update({ playing: false, paused: false, sentence: null, tokenId: null });
+    };
+    this.speak(u);
   }
 
   private applyVoice(u: SpeechSynthesisUtterance): void {

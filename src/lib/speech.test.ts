@@ -96,7 +96,7 @@ describe('japaneseVoices', () => {
 });
 
 describe('Speaker', () => {
-  it('1 文 1 発話で、届いた順に積む', () => {
+  it('1 文 1 発話で、合成側には 1 文だけ積み、読み終えたら届いた順に次の文を積む', () => {
     speaker.setSentence(0, st('あい'));
     speaker.play();
     expect(synth.texts).toEqual(['あい']);
@@ -104,11 +104,13 @@ describe('Speaker', () => {
 
     speaker.setSentence(1, st('うえ'));
     speaker.setSentence(2, st('お'));
-    expect(synth.texts).toEqual(['あい', 'うえ', 'お']);
+    expect(synth.texts).toEqual(['あい']);
 
     synth.end();
+    expect(synth.texts).toEqual(['うえ']);
     expect(state.sentence).toBe(1);
     synth.end();
+    expect(synth.texts).toEqual(['お']);
     synth.end();
     expect(state).toMatchObject({ playing: false, sentence: null });
   });
@@ -117,9 +119,12 @@ describe('Speaker', () => {
     speaker.setSentence(0, st('あ'));
     speaker.play();
     speaker.setSentence(2, st('う'));
-    expect(synth.texts).toEqual(['あ']);
+    synth.end();
+    expect(synth.texts).toEqual([]);
     speaker.setSentence(1, st('い'));
-    expect(synth.texts).toEqual(['あ', 'い', 'う']);
+    expect(synth.texts).toEqual(['い']);
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
   });
 
   it('読み終えて次の文を待っている間に届いた文は続けて読む', () => {
@@ -156,9 +161,12 @@ describe('Speaker', () => {
     expect(state.sentence).toBe(1);
 
     speaker.setVoice('nanami');
-    expect(synth.texts).toEqual(['い', 'う']);
-    expect(synth.queue.map((u) => u.voice?.voiceURI)).toEqual(['nanami', 'nanami']);
+    expect(synth.texts).toEqual(['い']);
+    expect(synth.current.voice?.voiceURI).toBe('nanami');
     expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
+    expect(synth.current.voice?.voiceURI).toBe('nanami');
   });
 
   it('読み上げ中に速さを変えると、今の文から新しい速さで積み直す', () => {
@@ -169,9 +177,12 @@ describe('Speaker', () => {
     synth.end();
 
     speaker.setRate(1.5);
-    expect(synth.texts).toEqual(['い', 'う']);
-    expect(synth.queue.map((u) => u.rate)).toEqual([1.5, 1.5]);
+    expect(synth.texts).toEqual(['い']);
+    expect(synth.current.rate).toBe(1.5);
     expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
+    expect(synth.current.rate).toBe(1.5);
   });
 
   it('一時停止中に声・速さを変えると、再開したとき今の文から新しい声・速さで読む', () => {
@@ -312,9 +323,10 @@ describe('Speaker', () => {
     speaker.play();
     synth.end();
     speaker.restart();
-    expect(synth.texts).toEqual(['あ', 'い']);
+    expect(synth.texts).toEqual(['あ']);
     expect(state).toMatchObject({ playing: true, sentence: 0 });
-    expect(synth.spoken).toHaveLength(4);
+    // あ・い・（restart で）あ。取り消した「い」の end では次を積まない
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'い', 'あ']);
   });
 
   it('respeakFrom：読み上げ中なら作り直した文から読み直す', () => {
@@ -328,8 +340,10 @@ describe('Speaker', () => {
 
     speaker.setSentence(1, st('イ'));
     speaker.respeakFrom(1);
-    expect(synth.texts).toEqual(['イ', 'う']);
+    expect(synth.texts).toEqual(['イ']);
     expect(state).toMatchObject({ playing: true, sentence: 1 });
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
   });
 
   it('respeakFrom：一時停止中は再開せず、再開したときその文から読む', () => {
@@ -388,8 +402,10 @@ describe('Speaker', () => {
     speaker.respeakFrom(1);
     expect(synth.texts).toEqual(['いー']);
     synth.end();
-    expect(synth.texts).toEqual(['イ', 'う']);
+    expect(synth.texts).toEqual(['イ']);
     expect(state).toMatchObject({ playing: true, paused: false, sentence: 1 });
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
   });
 
   it('試聴中に再生を押すと試聴をやめて本編を続ける', () => {
@@ -411,7 +427,9 @@ describe('Speaker', () => {
     synth.end();
     expect(synth.texts).toEqual(['い']);
     speaker.setSentence(2, st('う'));
-    expect(synth.texts).toEqual(['い', 'う']);
+    expect(synth.texts).toEqual(['い']);
+    synth.end();
+    expect(synth.texts).toEqual(['う']);
   });
 
   it('止まっているときの試聴は、終わっても本編を読まない', () => {
