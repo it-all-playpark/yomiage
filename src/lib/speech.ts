@@ -50,8 +50,9 @@ export class Speaker {
   private afterPreview: 'resume' | 'follow' | null = null;
   // 積んだ発話を読み終えるまで持っておく（参照が切れると onend が来ないブラウザがある）
   private live = new Set<SpeechSynthesisUtterance>();
-  // 一時停止中に見張りの時間が来たとき、再開したら見張りを張り直す
-  private rewatch: (() => void) | null = null;
+  // 積んだ発話が始まるかの見張り。一時停止で止め、再開したら待ち時間を最初から張り直す
+  private watchTimer: ReturnType<typeof setTimeout> | undefined;
+  private startWatch: (() => void) | null = null;
 
   constructor(
     private synth: SpeechSynthesis,
@@ -91,9 +92,7 @@ export class Speaker {
     if (this.state.paused) {
       this.synth.resume();
       this.update({ paused: false });
-      const rewatch = this.rewatch;
-      this.rewatch = null;
-      rewatch?.();
+      this.startWatch?.();
       return;
     }
     if (!this.state.playing) this.startFrom(0);
@@ -102,6 +101,8 @@ export class Speaker {
   pause(): void {
     if (!this.state.playing || this.state.paused) return;
     this.synth.pause();
+    // 一時停止中は始まらなくて当たり前なので見張らない
+    clearTimeout(this.watchTimer);
     this.update({ paused: true });
   }
 
@@ -242,11 +243,6 @@ export class Speaker {
     const timeout = START_TIMEOUT_MS * (restarts + 1);
     const watch = () => {
       if (!waiting || gen !== this.gen) return;
-      // 一時停止中は始まらなくて当たり前なので、再開したときから測り直す
-      if (this.state.paused) {
-        this.rewatch = () => setTimeout(watch, timeout);
-        return;
-      }
       // 始まらずに止まっている。取り消し、古い発話のイベントは世代番号で捨てる
       this.gen++;
       this.synth.cancel();
@@ -257,7 +253,11 @@ export class Speaker {
       } else done(this.gen);
     };
     this.speak(u);
-    setTimeout(watch, timeout);
+    this.startWatch = () => {
+      clearTimeout(this.watchTimer);
+      this.watchTimer = setTimeout(watch, timeout);
+    };
+    this.startWatch();
   }
 
   private applyVoice(u: SpeechSynthesisUtterance): void {

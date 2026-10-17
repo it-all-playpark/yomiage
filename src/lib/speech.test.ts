@@ -213,6 +213,19 @@ describe('Speaker', () => {
     expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'あ']);
   });
 
+  it('見張りの時間が切れる直前に一時停止・再開しても、再開したときから START_TIMEOUT_MS は積み直さない', () => {
+    speaker.setSentence(0, st('あ'));
+    synth.stuck.push('あ');
+    speaker.play();
+    speaker.pause();
+    vi.advanceTimersByTime(START_TIMEOUT_MS - 1);
+    speaker.play();
+    vi.advanceTimersByTime(START_TIMEOUT_MS - 1);
+    expect(synth.spoken).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(synth.spoken.map((u) => u.text)).toEqual(['あ', 'あ']);
+  });
+
   it('先の文が抜けていれば、その文が届くまで後ろは積まない', () => {
     speaker.setSentence(0, st('あ'));
     speaker.play();
