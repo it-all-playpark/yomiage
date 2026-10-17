@@ -518,6 +518,39 @@ describe('translateStream の訳し終えた塊の保存（§3.5）', () => {
     expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
   });
 
+  it('壊れた行の再要求でも JSON にならず文を捨てた塊は保存せず、次に訳すと要求し直す', async () => {
+    const broken = done(line(0, '一。') + '{"i":1,"ja":"二\n');
+    const retried = new Response(JSON.stringify({ choices: [{ message: { content: 'まだ壊れている' } }] }), { status: 200 });
+    const first = await run(fakeFetch([sseResponse(broken), retried]).impl);
+    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
+    const { got } = await run(impl);
+    expect(calls).toHaveLength(1);
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
+  });
+
+  it('出力の上限で打ち切られた（finish_reason が length の）塊は [DONE] があっても保存せず、次に訳すと要求し直す', async () => {
+    const cut = sse(line(0, '一。')) + `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n` + 'data: [DONE]\n\n';
+    const first = await run(fakeFetch([sseResponse(cut)]).impl);
+    expect(first.got.map((s) => s.ja)).toEqual(['一。']);
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '二。')))]);
+    const { got } = await run(impl);
+    expect(calls).toHaveLength(1);
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。']);
+  });
+
+  it('finish_reason が stop の塊は保存する', async () => {
+    const ok = sse(line(0, '一。')) + `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n` + 'data: [DONE]\n\n';
+    await run(fakeFetch([sseResponse(ok)]).impl);
+
+    const { impl, calls } = fakeFetch([]);
+    const { got } = await run(impl);
+    expect(calls).toHaveLength(0);
+    expect(got.map((s) => s.ja)).toEqual(['一。']);
+  });
+
   it('[DONE] を受け取らずにストリームが閉じた塊は保存せず、次に訳すと要求し直す', async () => {
     const first = await run(fakeFetch([sseResponse(sse(line(0, '一。')))]).impl);
     expect(first.got.map((s) => s.ja)).toEqual(['一。']);
