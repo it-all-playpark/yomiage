@@ -72,11 +72,15 @@ afterEach(() => {
 
 describe('translate', () => {
   it('届いた文をトークン化して積み、1 文目で再生を始める', async () => {
-    const fetchImpl = vi.fn().mockResolvedValueOnce(sseResponse([S0, S1]));
+    // 2 段落は 1 回の要求にまとまり、段落はモデルの p で分かれる
+    const fetchImpl = vi.fn().mockResolvedValueOnce(sseResponse([{ ...S0, p: 0 }, { ...S1, p: 1 }]));
     const { env, sp } = makeEnv(fetchImpl as unknown as typeof fetch);
     await translate(REQ, env);
 
-    expect(sentences.value.map((s) => s.i)).toEqual([0, 1]);
+    expect(sentences.value.map((s) => [s.i, s.p])).toEqual([
+      [0, 0],
+      [1, 1],
+    ]);
     const t = sentences.value[0].tokens.find((x) => x.text === '習近平');
     expect(t).toMatchObject({ fix: 'ai', reading: 'しゅうきんぺい' });
     // モデルが 2 文目も 0 番と返しても通し番号。id も文で分かれる

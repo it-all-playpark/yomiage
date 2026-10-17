@@ -11,6 +11,7 @@ import { upsertEntry } from './lib/storage';
 
 export interface SessionSentence {
   i: number;
+  p: number; // 原文の段落番号。訳文も同じ段落に分けて表示する
   ja: string;
   ai: AiReading[];
   once: Map<string, string>; // この文だけの修正（語 → 読み）
@@ -56,7 +57,7 @@ function dictMap(d: DictData): Map<string, string> {
   return new Map(d.entries.map((e) => [e.word, e.reading]));
 }
 
-function build(i: number, ja: string, ai: AiReading[], once: Map<string, string>, env: SessionEnv): SessionSentence {
+function build(i: number, p: number, ja: string, ai: AiReading[], once: Map<string, string>, env: SessionEnv): SessionSentence {
   const tokens = tokenizeSentence({
     sentence: i,
     text: ja,
@@ -66,7 +67,7 @@ function build(i: number, ja: string, ai: AiReading[], once: Map<string, string>
     analyzer: env.analyzer(),
     startId: i * ID_STRIDE,
   });
-  return { i, ja, ai, once, tokens, speech: buildSpeechText(tokens) };
+  return { i, p, ja, ai, once, tokens, speech: buildSpeechText(tokens) };
 }
 
 function replace(s: SessionSentence): void {
@@ -104,9 +105,9 @@ export async function translate(req: TranslateRequest, env: SessionEnv): Promise
       onWait: (sec) => {
         if (ctrl === controller) rateWait.value = sec;
       },
-      onSentence: (s) => {
+      onSentence: (s, p) => {
         if (ctrl !== controller) return;
-        const ss = build(s.i, s.ja, s.readings, new Map(), env);
+        const ss = build(s.i, p, s.ja, s.readings, new Map(), env);
         sentences.value = [...sentences.value, ss];
         env.speaker?.setSentence(ss.i, ss.speech);
         // 1 文目が届いたら読み始める（FR-3.1）
@@ -139,7 +140,7 @@ export function retry(env: SessionEnv): Promise<void> {
 export function rebuildAll(env: SessionEnv): void {
   const sel = selection.value;
   const old = sel ? findToken(sel.sentence, sel.tokenId) : null;
-  const next = sentences.value.map((s) => build(s.i, s.ja, s.ai, s.once, env));
+  const next = sentences.value.map((s) => build(s.i, s.p, s.ja, s.ai, s.once, env));
   sentences.value = next;
   for (const s of next) env.speaker?.setSentence(s.i, s.speech);
   // 作り直すと id が振り直されるので、選択は同じ位置・同じ文字列の語に付け替える。分け方が変わって無くなれば閉じる
@@ -162,7 +163,7 @@ export function applyFix(
     const s = sentences.value.find((x) => x.i === opts.sentence);
     if (!s) return;
     const once = new Map(s.once).set(opts.word, opts.reading);
-    const ns = build(s.i, s.ja, s.ai, once, env);
+    const ns = build(s.i, s.p, s.ja, s.ai, once, env);
     replace(ns);
     env.speaker?.setSentence(ns.i, ns.speech);
   } else {

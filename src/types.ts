@@ -19,6 +19,7 @@ export interface AiReading {
 /** Groq が 1 行で返す 1 文（§3.3） */
 export interface Sentence {
   i: number;
+  p?: number; // 1 回の入力の中での段落番号（§3.5）。モデルが付けなければ無い
   ja: string;
   readings: AiReading[];
 }

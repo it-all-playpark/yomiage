@@ -67,6 +67,7 @@ function fakeFetch(responses: (Response | Error | DOMException)[]) {
 
 async function run(fetchImpl: typeof fetch, text = 'Hello.', model = DEFAULT_MODEL, signal?: AbortSignal) {
   const got: Sentence[] = [];
+  const paras: number[] = [];
   const result = await translateStream({
     key: 'gsk_test',
     model,
@@ -74,10 +75,13 @@ async function run(fetchImpl: typeof fetch, text = 'Hello.', model = DEFAULT_MOD
     sourceLang: 'auto',
     dict: [],
     signal,
-    onSentence: (s) => got.push(s),
+    onSentence: (s, p) => {
+      got.push(s);
+      paras.push(p);
+    },
     fetchImpl,
   });
-  return { got, result };
+  return { got, paras, result };
 }
 
 describe('MODELS', () => {
@@ -155,14 +159,42 @@ describe('translateStream', () => {
     expect(got.map((s) => s.ja)).toEqual(['終わり。']);
   });
 
-  it('短い段落はまとめて 1 回で送る', async () => {
-    const { impl, calls } = fakeFetch([sseResponse(sse(line(0, '一。') + line(1, '二。') + line(2, '三。')) + 'data: [DONE]\n\n')]);
+  it('短い段落はまとめて 1 回で送り、段落番号はモデルの p から取る', async () => {
+    const out = [
+      { i: 0, p: 0, ja: '一。', readings: [] },
+      { i: 1, p: 1, ja: '二。', readings: [] },
+      { i: 2, p: 1, ja: '三。', readings: [] },
+      { i: 3, p: 2, ja: '四。', readings: [] },
+    ];
+    const { impl, calls } = fakeFetch([sseResponse(sse(out.map((o) => JSON.stringify(o) + '\n').join('')) + 'data: [DONE]\n\n')]);
 
-    const { got } = await run(impl, 'One.\n\nTwo.\n\nThree.');
+    const { got, paras } = await run(impl, 'One.\n\nTwo. Three.\n\nFour.');
 
-    expect(got.map((s) => s.ja)).toEqual(['一。', '二。', '三。']);
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。', '三。', '四。']);
+    expect(paras).toEqual([0, 1, 1, 2]);
     expect(calls).toHaveLength(1);
-    expect((calls[0].body.messages as { content: string }[])[1].content).toBe('One.\n\nTwo.\n\nThree.');
+    expect((calls[0].body.messages as { content: string }[])[1].content).toBe('One.\n\nTwo. Three.\n\nFour.');
+  });
+
+  it('p が無い・戻る・塊の外を指す文は直前の文と同じ段落にし、次の塊は塊の段落数だけ進める', async () => {
+    const raw = (o: object) => JSON.stringify(o) + '\n';
+    const p1 =
+      sse(
+        raw({ i: 0, p: 1, ja: '一。', readings: [] }) +
+          raw({ i: 1, ja: '二。', readings: [] }) +
+          raw({ i: 2, p: 0, ja: '三。', readings: [] }) +
+          raw({ i: 3, p: 5, ja: '四。', readings: [] }),
+      ) + 'data: [DONE]\n\n';
+    const p2 = sse(raw({ i: 0, p: 0, ja: '五。', readings: [] })) + 'data: [DONE]\n\n';
+    const { impl } = fakeFetch([sseResponse(p1), sseResponse(p2)]);
+
+    // 1 つ目の塊は 2 段落。CHUNK_CHARS を超える段落はその次の塊になる
+    const { got, paras } = await run(impl, `One.\n\nTwo.\n\n${long('Five.')}`);
+
+    expect(got.map((s) => s.ja)).toEqual(['一。', '二。', '三。', '四。', '五。']);
+    expect(paras).toEqual([1, 1, 1, 1, 2]);
+    // 段落番号は onSentence の引数で渡し、Sentence には残さない
+    expect(got.every((s) => !('p' in s))).toBe(true);
   });
 
   it('塊ごとに順に送り、文番号は全塊通しで 0 から振る', async () => {
@@ -171,13 +203,15 @@ describe('translateStream', () => {
     const p2 = sse(line(0, '三。')) + 'data: [DONE]\n\n';
     const { impl, calls } = fakeFetch([sseResponse(p1), sseResponse(p2)]);
 
-    const { got } = await run(impl, `${long('One. Two.')}\n\nThree.`);
+    const { got, paras } = await run(impl, `${long('One. Two.')}\n\nThree.`);
 
     expect(got.map((s) => [s.i, s.ja])).toEqual([
       [0, '一。'],
       [1, '二。'],
       [2, '三。'],
     ]);
+    // 訳文を原文と同じ段落に分けられるよう、文ごとに段落番号を渡す
+    expect(paras).toEqual([0, 0, 1]);
     expect(calls).toHaveLength(2);
     const user = (c: Call) => (c.body.messages as { role: string; content: string }[])[1].content;
     expect(user(calls[0])).toBe(long('One. Two.'));
@@ -422,7 +456,7 @@ describe('toGroqError', () => {
 
 describe('chunkParagraphs', () => {
   it('段落を max 文字までまとめ、超える段落は 1 つで 1 塊にする', () => {
-    expect(chunkParagraphs('aaa\n\nbb\n\ncccccccc\n\nd\n\ne', 7)).toEqual(['aaa\n\nbb', 'cccccccc', 'd\n\ne']);
+    expect(chunkParagraphs('aaa\n\nbb\n\ncccccccc\n\nd\n\ne', 7)).toEqual([['aaa', 'bb'], ['cccccccc'], ['d', 'e']]);
   });
 
   it('空文字は塊なし', () => {
