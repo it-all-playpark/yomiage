@@ -548,6 +548,49 @@ describe('translateStream の訳し終えた塊（§3.5）', () => {
     expect(calls).toHaveLength(0);
     expect(got.map((s) => s.ja)).toEqual(['一。']);
   });
+
+  it('2 つの塊を欠けなく訳すと、それぞれの塊の文だけを塊の番号に入れ、呼び直すと前回と同じ文を 1 回ずつ渡す', async () => {
+    const text = `${long('One.')}\n\nTwo.`;
+    const finished: SavedSentence[][] = [];
+    await run(fakeFetch([sseResponse(done(line(0, '一。'))), sseResponse(done(line(0, '二。')))]).impl, text, DEFAULT_MODEL, undefined, { finished });
+    expect(finished).toEqual([[{ p: 0, ja: '一。', readings: [] }], [{ p: 0, ja: '二。', readings: [] }]]);
+
+    const { impl, calls } = fakeFetch([]);
+    const { got, paras } = await run(impl, text, DEFAULT_MODEL, undefined, { finished });
+    expect(calls).toHaveLength(0);
+    expect(got.map((s) => [s.i, s.ja])).toEqual([
+      [0, '一。'],
+      [1, '二。'],
+    ]);
+    expect(paras).toEqual([0, 1]);
+  });
+
+  it('1 つ目の塊が打ち切られても、欠けなく受け取れた 2 つ目の塊は finished に入れ、呼び直すと 1 つ目だけ要求する', async () => {
+    const text = `${long('One.')}\n\nTwo.`;
+    const finished: SavedSentence[][] = [];
+    const cut = sse(line(0, '一。')) + `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n` + 'data: [DONE]\n\n';
+    await run(fakeFetch([sseResponse(cut), sseResponse(done(line(0, '二。')))]).impl, text, DEFAULT_MODEL, undefined, { finished });
+    expect(finished[0]).toBeUndefined();
+    expect(finished[1]).toEqual([{ p: 0, ja: '二。', readings: [] }]);
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。') + line(1, '一の続き。')))]);
+    const { got } = await run(impl, text, DEFAULT_MODEL, undefined, { finished });
+    expect(calls).toHaveLength(1);
+    expect((calls[0].body.messages as { content: string }[])[1].content).toBe(long('One.'));
+    expect(got.map((s) => s.ja)).toEqual(['一。', '一の続き。', '二。']);
+  });
+
+  it('[DONE] を受け取っても 1 文も無かった塊は finished に入れず、呼び直すと要求し直す', async () => {
+    const finished: SavedSentence[][] = [];
+    const first = await run(fakeFetch([sseResponse(done(''))]).impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
+    expect(first.got).toEqual([]);
+    expect(finished).toEqual([]);
+
+    const { impl, calls } = fakeFetch([sseResponse(done(line(0, '一。')))]);
+    const { got } = await run(impl, 'Hello.', DEFAULT_MODEL, undefined, { finished });
+    expect(calls).toHaveLength(1);
+    expect(got.map((s) => s.ja)).toEqual(['一。']);
+  });
 });
 
 describe('toGroqError', () => {
