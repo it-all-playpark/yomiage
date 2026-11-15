@@ -1,0 +1,52 @@
+# Renovate から Dependabot へ移行（renovate.json はこのPRで削除）。
+# Renovate 側の調整のうち Dependabot で再現できるもの:
+# - 週次スケジュール（Renovate は日・月の48h窓 → Dependabot は曜日1つなので月曜）
+# - 同時 PR 上限 3（open-pull-requests-limit）
+# - 公開後3日の熟成待ち → cooldown（セキュリティ更新は cooldown 対象外で即時 PR になる点も Renovate の vulnerabilityAlerts と同じ向き）
+# - non-major を 1 PR にまとめる → groups の update-types
+# - vite toolchain は同じ PR → groups（Dependabot は先にマッチしたグループが優先なので non-major グループより前に置く）
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      vite-toolchain:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "vite"
+          - "@vitejs/*"
+          - "@preact/preset-vite"
+      all-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      all-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
